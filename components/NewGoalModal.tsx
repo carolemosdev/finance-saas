@@ -1,126 +1,96 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Loader2, Target, Save } from "lucide-react";
+import { X, Loader2, Target } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import CurrencyInput from 'react-currency-input-field';
+import { toast } from "sonner";
 
-interface NewGoalModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  userId: string | null;
-  goalToEdit?: any; // <--- Prop nova
-}
+interface GoalProps { isOpen: boolean; onClose: () => void; userId: string | null; goalToEdit?: any; }
 
-export function NewGoalModal({ isOpen, onClose, userId, goalToEdit }: NewGoalModalProps) {
-  const [isLoading, setIsLoading] = useState(false);
-  
+export function NewGoalModal({ isOpen, onClose, userId, goalToEdit }: GoalProps) {
   const [name, setName] = useState("");
-  const [targetAmount, setTargetAmount] = useState("");
-  const [currentAmount, setCurrentAmount] = useState("");
-  const [deadline, setDeadline] = useState("");
+  const [targetAmount, setTargetAmount] = useState<number | undefined>(undefined);
+  const [currentAmount, setCurrentAmount] = useState<number | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // EFEITO: Preencher campos se for edição
   useEffect(() => {
     if (isOpen && goalToEdit) {
       setName(goalToEdit.name);
-      setTargetAmount(String(goalToEdit.target_amount));
-      setCurrentAmount(String(goalToEdit.current_amount));
-      setDeadline(goalToEdit.deadline || "");
-    } else if (isOpen && !goalToEdit) {
-      setName("");
-      setTargetAmount("");
-      setCurrentAmount("");
-      setDeadline("");
+      setTargetAmount(goalToEdit.target_amount);
+      setCurrentAmount(goalToEdit.current_amount);
+    } else {
+      setName(""); setTargetAmount(undefined); setCurrentAmount(undefined);
     }
   }, [isOpen, goalToEdit]);
 
-  async function handleSave(e: React.FormEvent) {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userId) return;
+    if (!userId || !targetAmount) return;
     setIsLoading(true);
 
-    const target = parseFloat(targetAmount.replace(",", "."));
-    const current = currentAmount ? parseFloat(currentAmount.replace(",", ".")) : 0;
-
-    if (!name || !targetAmount) {
-      alert("Preencha o nome e o valor da meta.");
-      setIsLoading(false);
-      return;
-    }
-
-    const payload = {
-      name,
-      target_amount: target,
-      current_amount: current,
-      deadline: deadline || null,
-      user_id: userId
-    };
-
+    const payload = { user_id: userId, name, target_amount: targetAmount, current_amount: currentAmount || 0 };
     let error;
 
     if (goalToEdit) {
-      // UPDATE
-      const { error: updateError } = await supabase
-        .from("goals")
-        .update(payload)
-        .eq("id", goalToEdit.id);
-      error = updateError;
+       const { error: err } = await supabase.from("goals").update(payload).eq("id", goalToEdit.id);
+       error = err;
     } else {
-      // INSERT
-      const { error: insertError } = await supabase
-        .from("goals")
-        .insert(payload);
-      error = insertError;
+       const { error: err } = await supabase.from("goals").insert([payload]);
+       error = err;
     }
 
-    if (error) {
-      console.error(error);
-      alert("Erro ao salvar meta!");
-    } else {
+    if (error) toast.error("Erro ao salvar meta.");
+    else {
+      toast.success("Meta salva com sucesso!");
       onClose();
     }
     setIsLoading(false);
-  }
+  };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-lg w-full max-w-md overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-          <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
-            <Target className="text-purple-600" size={20} />
-            {goalToEdit ? "Editar Meta" : "Nova Meta"}
-          </h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-red-500 transition-colors">
-            <X size={20} />
-          </button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95">
+        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+          <h2 className="text-xl font-bold text-slate-800">{goalToEdit ? "Editar Meta" : "Nova Meta"}</h2>
+          <button onClick={onClose}><X size={20} className="text-slate-500" /></button>
         </div>
-
-        <form onSubmit={handleSave} className="p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nome da Meta</label>
-            <input type="text" className="w-full border border-gray-300 rounded-lg p-2" value={name} onChange={(e) => setName(e.target.value)} />
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div className="space-y-1">
+             <label className="text-xs font-bold text-slate-500 uppercase ml-1">Nome da Meta</label>
+             <input type="text" required placeholder="Ex: Viagem, Carro Novo..." className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-purple-500 outline-none font-medium" value={name} onChange={e => setName(e.target.value)} />
+          </div>
+          
+          <div className="space-y-1">
+             <label className="text-xs font-bold text-slate-500 uppercase ml-1">Valor Alvo (Objetivo)</label>
+             <CurrencyInput
+                  placeholder="R$ 0,00"
+                  decimalsLimit={2}
+                  decimalScale={2}
+                  intlConfig={{ locale: 'pt-BR', currency: 'BRL' }}
+                  onValueChange={(value) => setTargetAmount(value ? Number(value.replace(",", ".")) : undefined)}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-purple-500 outline-none font-bold text-lg text-purple-600"
+                  defaultValue={targetAmount}
+             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Alvo (R$)</label>
-              <input type="number" step="0.01" className="w-full border border-gray-300 rounded-lg p-2" value={targetAmount} onChange={(e) => setTargetAmount(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Já tenho</label>
-              <input type="number" step="0.01" className="w-full border border-gray-300 rounded-lg p-2" value={currentAmount} onChange={(e) => setCurrentAmount(e.target.value)} />
-            </div>
+          <div className="space-y-1">
+             <label className="text-xs font-bold text-slate-500 uppercase ml-1">Já Guardado (Opcional)</label>
+             <CurrencyInput
+                  placeholder="R$ 0,00"
+                  decimalsLimit={2}
+                  decimalScale={2}
+                  intlConfig={{ locale: 'pt-BR', currency: 'BRL' }}
+                  onValueChange={(value) => setCurrentAmount(value ? Number(value.replace(",", ".")) : undefined)}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-purple-500 outline-none font-medium"
+                  defaultValue={currentAmount}
+             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Data Limite</label>
-            <input type="date" className="w-full border border-gray-300 rounded-lg p-2 text-gray-600" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
-          </div>
-
-          <button type="submit" disabled={isLoading} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 rounded-lg flex justify-center gap-2 mt-4">
-            {isLoading ? <Loader2 className="animate-spin" /> : <><Save size={18}/> Salvar</>}
+          <button type="submit" disabled={isLoading} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3.5 rounded-xl shadow-lg mt-2 flex justify-center items-center gap-2">
+            {isLoading ? <Loader2 className="animate-spin" /> : "Salvar Meta"}
           </button>
         </form>
       </div>

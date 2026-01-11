@@ -12,19 +12,7 @@ interface ExpenseChartProps {
   transactions: Transaction[];
 }
 
-// Expandimos a paleta de cores para aguentar mais categorias sem repetir logo
-const COLORS = [
-  "#6366f1", // Indigo
-  "#10b981", // Emerald
-  "#f59e0b", // Amber
-  "#ef4444", // Red
-  "#8b5cf6", // Violet
-  "#ec4899", // Pink
-  "#06b6d4", // Cyan
-  "#f97316", // Orange
-  "#84cc16", // Lime
-  "#64748b", // Slate
-];
+const COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316", "#84cc16", "#64748b"];
 
 export function ExpenseChart({ transactions }: ExpenseChartProps) {
   const dataMap = transactions
@@ -42,25 +30,20 @@ export function ExpenseChart({ transactions }: ExpenseChartProps) {
       color: COLORS[index % COLORS.length],
     }))
     .sort((a, b) => b.value - a.value)
-    // Aumentamos para TOP 10, já que agora temos scroll
     .slice(0, 10);
 
-  const formatMoney = (val: number) =>
-    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
-
-  // Calcula o total apenas do que está visível (Top 10)
+  const formatMoney = (val: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
   const totalVisible = data.reduce((acc, curr) => acc + curr.value, 0);
 
   if (data.length === 0) {
     return (
-      <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-200/60 border-0 h-full min-h-[480px] flex flex-col justify-center items-center text-center">
+      <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-200/60 border-0 h-[520px] flex flex-col justify-center items-center text-center">
         <p className="text-slate-400 text-sm font-medium">Sem despesas para exibir.</p>
       </div>
     );
   }
 
   return (
-    // Definimos uma altura fixa (h-[520px]) para o card não esticar
     <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-200/60 border-0 h-[520px] flex flex-col font-sans">
       <div className="flex justify-between items-center mb-6">
         <h3 className="font-bold text-xl text-slate-800">Despesas por Categoria</h3>
@@ -69,8 +52,8 @@ export function ExpenseChart({ transactions }: ExpenseChartProps) {
 
       <div className="flex-1 flex flex-col items-center gap-6 overflow-hidden">
         
-        {/* GRÁFICO (Fixo no topo) */}
-        <div className="w-full h-[220px] relative flex-shrink-0">
+        {/* CORREÇÃO: Adicionado 'w-full min-w-0' e style explícito para garantir dimensões */}
+        <div className="w-full min-w-0 relative flex-shrink-0" style={{ height: 220 }}>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
@@ -95,30 +78,14 @@ export function ExpenseChart({ transactions }: ExpenseChartProps) {
           </div>
         </div>
 
-        {/* LEGENDA ROLÁVEL (Scrollable Area) 
-           - flex-1: Ocupa o espaço restante
-           - overflow-y-auto: Cria scroll se passar do tamanho
-           - custom-scrollbar: Usa nosso estilo fino e escuro
-           - pr-2: Um respiro para a barra de rolagem não colar no texto
-        */}
         <div className="w-full flex-1 overflow-y-auto custom-scrollbar pr-2 flex flex-col gap-3">
           {data.map((item, index) => (
             <div key={index} className="flex items-center justify-between text-sm group w-full p-2 hover:bg-slate-50 rounded-lg transition-colors">
-              
               <div className="flex items-center gap-3">
-                <div 
-                  className="w-3 h-3 rounded-full shrink-0 shadow-sm ring-2 ring-white" 
-                  style={{ backgroundColor: item.color }}
-                ></div>
-                <span className="text-slate-600 font-medium text-sm">
-                  {item.name}
-                </span>
+                <div className="w-3 h-3 rounded-full shrink-0 shadow-sm ring-2 ring-white" style={{ backgroundColor: item.color }}></div>
+                <span className="text-slate-600 font-medium text-sm">{item.name}</span>
               </div>
-
-              <span className="font-bold text-slate-800 whitespace-nowrap text-sm">
-                {formatMoney(item.value)}
-              </span>
-              
+              <span className="font-bold text-slate-800 whitespace-nowrap text-sm">{formatMoney(item.value)}</span>
             </div>
           ))}
         </div>

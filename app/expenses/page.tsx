@@ -9,6 +9,7 @@ import {
 } from "lucide-react"; 
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { NewTransactionModal } from "../../components/NewTransactionModal"; 
+import { MobileNav } from "../../components/MobileNav";
 
 interface Transaction {
   id: number;
@@ -100,7 +101,9 @@ export default function ExpensesPage() {
   );
 
   return (
-    <div className="flex h-screen bg-slate-50 text-slate-900 font-sans">
+    <div className="flex h-screen bg-slate-50 text-slate-900 font-sans flex-col md:flex-row">
+      <MobileNav userEmail={userEmail} onLogout={handleLogout} />
+
       <aside className="w-72 bg-slate-900 hidden md:flex flex-col shadow-2xl z-10 relative">
         <div className="p-8">
           <h1 className="text-3xl font-extrabold text-white flex items-center gap-3 tracking-tight">
@@ -138,9 +141,11 @@ export default function ExpensesPage() {
         
         {isLoading ? <div className="text-center py-20"><Loader2 className="animate-spin mx-auto text-brand-600" size={32}/></div> : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-200/60 border-0 lg:col-span-1 h-[400px]">
+            
+            {/* GRÁFICO (Com fix de altura style={{ height: 300 }}) */}
+            <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-200/60 border-0 lg:col-span-1 h-[400px] flex flex-col">
               <h3 className="font-bold text-lg mb-6 text-slate-700">Ranking de Gastos</h3>
-              <div className="h-[300px]">
+              <div className="w-full flex-1 min-w-0" style={{ height: 300 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 10 }}>
                     <XAxis type="number" hide />
@@ -151,43 +156,74 @@ export default function ExpensesPage() {
                       contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
                     />
                     <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={32}>
-                      {chartData.map((entry, index) => <Cell key={`cell-${index}`} fill="#f43f5e" />)} {/* Rose-500 */}
+                      <Cell fill="#f43f5e" /> {/* Rose-500 */}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
+            {/* LISTA (Com Cards Mobile) */}
             <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/60 border-0 overflow-hidden lg:col-span-2 flex flex-col">
               <div className="p-6 border-b border-slate-100">
                  <h3 className="font-bold text-lg text-slate-700">Histórico de Saídas</h3>
               </div>
-              <div className="overflow-auto flex-1">
-                <table className="w-full text-left border-collapse">
-                  <thead className="bg-slate-50/50 text-slate-500 text-xs uppercase tracking-wider font-semibold">
-                    <tr><th className="p-5">Descrição</th><th className="p-5">Categoria</th><th className="p-5 text-right">Valor</th><th className="p-5 text-right">Ações</th></tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {transactions.map((t) => (
-                      <tr key={t.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="p-5 font-bold text-slate-800">{t.description}</td>
-                        <td className="p-5">
-                          <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider">{t.categories?.name}</span>
-                        </td>
-                        <td className="p-5 text-right font-extrabold text-rose-600">{formatMoney(t.amount)}</td>
-                        <td className="p-5 text-right flex justify-end gap-2">
-                          <button onClick={() => handleEdit(t)} className="bg-slate-100 hover:bg-brand-100 text-slate-400 hover:text-brand-600 p-2 rounded-lg transition-colors">
-                            <Pencil size={16} />
-                          </button>
-                          <button onClick={() => handleDelete(t.id)} className="bg-slate-100 hover:bg-red-100 text-slate-400 hover:text-red-600 p-2 rounded-lg transition-colors">
-                            <Trash2 size={16} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {transactions.length === 0 && <tr><td colSpan={4} className="p-12 text-center text-slate-400">Nenhuma despesa registrada.</td></tr>}
-                  </tbody>
-                </table>
+              
+              <div className="flex-1">
+                 {/* MOBILE CARDS */}
+                 <div className="md:hidden divide-y divide-slate-100">
+                  {transactions.map((t) => (
+                    <div key={t.id} className="p-4 flex flex-col gap-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="font-bold text-slate-800 text-sm">{t.description}</p>
+                          <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider mt-1 inline-block">
+                            {t.categories?.name}
+                          </span>
+                        </div>
+                        <p className="font-extrabold text-rose-600 text-sm">{formatMoney(t.amount)}</p>
+                      </div>
+                      <div className="flex justify-end gap-3 pt-2">
+                        <button onClick={() => handleEdit(t)} className="flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-brand-600 px-3 py-2 rounded-lg bg-slate-50">
+                          <Pencil size={14} /> Editar
+                        </button>
+                        <button onClick={() => handleDelete(t.id)} className="flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-rose-600 px-3 py-2 rounded-lg bg-slate-50">
+                          <Trash2 size={14} /> Excluir
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {transactions.length === 0 && <div className="p-8 text-center text-slate-400 text-sm">Nenhuma despesa.</div>}
+                </div>
+
+                {/* DESKTOP TABLE */}
+                <div className="hidden md:block overflow-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-50/50 text-slate-500 text-xs uppercase tracking-wider font-semibold">
+                      <tr><th className="p-5">Descrição</th><th className="p-5">Categoria</th><th className="p-5 text-right">Valor</th><th className="p-5 text-right">Ações</th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {transactions.map((t) => (
+                        <tr key={t.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="p-5 font-bold text-slate-800">{t.description}</td>
+                          <td className="p-5">
+                            <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider">{t.categories?.name}</span>
+                          </td>
+                          <td className="p-5 text-right font-extrabold text-rose-600">{formatMoney(t.amount)}</td>
+                          <td className="p-5 text-right flex justify-end gap-2">
+                            <button onClick={() => handleEdit(t)} className="bg-slate-100 hover:bg-brand-100 text-slate-400 hover:text-brand-600 p-2 rounded-lg transition-colors">
+                              <Pencil size={16} />
+                            </button>
+                            <button onClick={() => handleDelete(t.id)} className="bg-slate-100 hover:bg-red-100 text-slate-400 hover:text-red-600 p-2 rounded-lg transition-colors">
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {transactions.length === 0 && <tr><td colSpan={4} className="p-12 text-center text-slate-400">Nenhuma despesa registrada.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
