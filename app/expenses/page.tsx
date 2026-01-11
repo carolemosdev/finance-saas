@@ -54,7 +54,7 @@ export default function ExpensesPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/auth"); return; }
       setUserId(user.id);
-      setUserEmail(user.email);
+      setUserEmail(user.email ?? null);
       fetchData(user.id);
     };
     checkUser();
@@ -151,7 +151,7 @@ export default function ExpensesPage() {
                     <XAxis type="number" hide />
                     <YAxis dataKey="name" type="category" width={90} tick={{fontSize: 12, fill: '#64748b'}} axisLine={false} tickLine={false} />
                     <Tooltip 
-                      formatter={(value: number) => formatMoney(value)} 
+                      formatter={(value: any) => formatMoney(value)} 
                       cursor={{fill: '#f1f5f9', radius: 4}} 
                       contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
                     />

@@ -46,7 +46,7 @@ export function InsightsWidget({ transactions }: InsightsWidgetProps) {
             <Tooltip 
               cursor={{ fill: '#f1f5f9', radius: 4 }}
               contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-              formatter={(value: number) => [formatMoney(value), "Gasto"]}
+              formatter={(value: any) => [formatMoney(value), "Gasto"]}
             />
             <Bar dataKey="value" radius={[4, 4, 4, 4]} barSize={40}>
               {data.map((entry, index) => (

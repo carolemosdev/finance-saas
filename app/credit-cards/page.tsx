@@ -23,7 +23,7 @@ export default function CreditCardsPage() {
     const checkUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/auth"); return; }
-      setUserId(user.id); setUserEmail(user.email); fetchCards(user.id);
+      setUserId(user.id); setUserEmail(user.email ?? null); fetchCards(user.id);
     };
     checkUser();
   }, [router]);
