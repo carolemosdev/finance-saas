@@ -115,11 +115,12 @@ export function NewAssetModal({ isOpen, onClose, userId, assetToEdit }: AssetPro
              </select>
           </div>
 
-          {/* Feedback visual do total */}
-          {quantity && price && (
+         {/* Feedback visual do total - CORRIGIDO */}
+          {/* Agora usamos "!!quantity" ou verificamos se é > 0 para garantir que é booleano */}
+          {(quantity || 0) > 0 && (price || 0) > 0 && (
             <div className="text-right text-sm text-slate-500 font-medium">
               Total: <span className="text-brand-600 font-bold">
-                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(quantity * price)}
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(quantity! * price!)}
               </span>
             </div>
           )}
