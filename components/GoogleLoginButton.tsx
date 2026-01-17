@@ -1,13 +1,13 @@
 "use client";
 
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+// MUDANÇA AQUI: Usamos o cliente que já existe no seu projeto
+import { supabase } from "../lib/supabase";
 
 export function GoogleLoginButton() {
   const [isLoading, setIsLoading] = useState(false);
-  const supabase = createClientComponentClient();
 
   const handleLogin = async () => {
     setIsLoading(true);
@@ -15,7 +15,7 @@ export function GoogleLoginButton() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          // Isso garante que o usuário volte para o lugar certo
+          // Garante que o usuário volte para a rota de callback
           redirectTo: `${window.location.origin}/auth/callback`,
           queryParams: {
             access_type: 'offline',
