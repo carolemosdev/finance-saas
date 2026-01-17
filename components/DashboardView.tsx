@@ -13,9 +13,8 @@ import { SmartAlertsWidget } from "./SmartAlertsWidget";
 import { InsightsWidget } from "./InsightsWidget";
 import { MobileNav } from "./MobileNav";
 import { supabase } from "../lib/supabase";
-// 1. IMPORTAÇÃO DO BOTÃO DE PAGAMENTO
 import { PayInvoiceButton } from "./PayInvoiceButton";
-
+import { WhatsNewModal } from "./WhatsNewModal";
 interface DashboardProps {
   transactions: any[];
   cards: any[];
@@ -301,6 +300,7 @@ export function DashboardView({
         onClose={handleSuccess} 
         userId={userId} 
       />
+      <WhatsNewModal />
     </div>
   );
 }
