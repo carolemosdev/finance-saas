@@ -6,14 +6,13 @@ import { Zap, CreditCard, Sparkles, TrendingUp, X } from "lucide-react";
 export function WhatsNewModal() {
   const [isOpen, setIsOpen] = useState(false);
 
-  // Mude isso quando lançar novidades futuras (ex: 'finsaas_update_v2')
-  const CURRENT_VERSION_KEY = "finsaas_update_v1_investments";
+  // Mudei a chave para 'flui_v1_friendly' para o modal aparecer novamente
+  // já que mudamos os textos.
+  const CURRENT_VERSION_KEY = "flui_v1_friendly";
 
   useEffect(() => {
-    // Verifica se o usuário já viu essa atualização específica
     const hasSeenUpdate = localStorage.getItem(CURRENT_VERSION_KEY);
     if (!hasSeenUpdate) {
-      // Pequeno delay para não explodir na cara do usuário assim que carrega
       const timer = setTimeout(() => setIsOpen(true), 1500);
       return () => clearTimeout(timer);
     }
@@ -21,7 +20,6 @@ export function WhatsNewModal() {
 
   const handleClose = () => {
     setIsOpen(false);
-    // Marca no navegador do usuário que ele já viu
     localStorage.setItem(CURRENT_VERSION_KEY, "true");
   };
 
@@ -48,8 +46,9 @@ export function WhatsNewModal() {
             <div className="bg-white/10 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-md shadow-lg border border-white/20">
                <Sparkles className="w-8 h-8 text-yellow-300 drop-shadow-md" />
             </div>
-            <h2 className="text-2xl font-extrabold tracking-tight">O Flui está de cara nova!</h2>
-            <p className="text-brand-100 font-medium mt-1">Acabamos de lançar 3 grandes novidades.</p>
+            {/* TEXTO ATUALIZADO: MAIS PRÓXIMO */}
+            <h2 className="text-2xl font-extrabold tracking-tight">O Flui ficou ainda melhor pra você!</h2>
+            <p className="text-brand-100 font-medium mt-1">Preparamos novidades para simplificar sua rotina.</p>
           </div>
         </div>
 
@@ -60,9 +59,9 @@ export function WhatsNewModal() {
               <TrendingUp className="w-6 h-6 text-purple-600" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-800 text-lg">Investimentos em Tempo Real</h3>
+              <h3 className="font-bold text-slate-800 text-lg">Seus Investimentos em Tempo Real</h3>
               <p className="text-slate-500 text-sm leading-relaxed mt-1">
-                Conectamos com a B3! Seus FIIs e Ações agora mostram a cotação real atualizada automaticamente.
+                Conectamos o Flui direto na B3. Agora você vê seu patrimônio crescendo com os valores atualizados na hora.
               </p>
             </div>
           </div>
@@ -73,9 +72,9 @@ export function WhatsNewModal() {
               <Zap className="w-6 h-6 text-emerald-600" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-800 text-lg">Busca Inteligente</h3>
+              <h3 className="font-bold text-slate-800 text-lg">Cadastro Inteligente</h3>
               <p className="text-slate-500 text-sm leading-relaxed mt-1">
-                Ao adicionar um ativo, o sistema sugere o código (ticker) e preenche o preço para você.
+                Esqueça o trabalho manual. Comece a digitar o nome da ação e a gente preenche o resto pra você.
               </p>
             </div>
           </div>
@@ -86,9 +85,9 @@ export function WhatsNewModal() {
               <CreditCard className="w-6 h-6 text-blue-600" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-800 text-lg">Pagamento de Faturas</h3>
+              <h3 className="font-bold text-slate-800 text-lg">Adeus, Fatura em Aberto</h3>
               <p className="text-slate-500 text-sm leading-relaxed mt-1">
-                Novo botão "Pagar Fatura" nos seus cartões. Ele zera o limite e debita do seu saldo num clique.
+                Feche o mês com um clique. O novo botão "Pagar Fatura" organiza seu saldo e zera o cartão num piscar de olhos.
               </p>
             </div>
           </div>
@@ -99,7 +98,8 @@ export function WhatsNewModal() {
             onClick={handleClose}
             className="bg-brand-600 hover:bg-brand-700 text-white font-bold py-4 px-8 rounded-xl shadow-lg shadow-brand-600/20 transition-all active:scale-[0.98] w-full flex items-center justify-center gap-2 text-lg"
           >
-            <span>Incrível, quero ver!</span> 🚀
+            {/* TEXTO DO BOTÃO ATUALIZADO */}
+            <span>Adorei, quero ver!</span> 💙
           </button>
         </div>
 

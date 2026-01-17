@@ -15,6 +15,7 @@ import { MobileNav } from "./MobileNav";
 import { supabase } from "../lib/supabase";
 import { PayInvoiceButton } from "./PayInvoiceButton";
 import { WhatsNewModal } from "./WhatsNewModal";
+
 interface DashboardProps {
   transactions: any[];
   cards: any[];
@@ -44,6 +45,9 @@ export function DashboardView({
   const router = useRouter();
   const [isModalOpen, setIsModalOpen] = useState(false);
   
+  // 1. Extrai o nome do usuário para ser mais íntimo
+  const userName = userEmail?.split("@")[0] || "Pessoa Incrível";
+
   const formatMoney = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
   const handleLogout = async () => {
@@ -56,7 +60,7 @@ export function DashboardView({
     router.refresh(); 
   };
 
-  // --- LÓGICA DE ECONOMIA INTELIGENTE ---
+  // --- LÓGICA DE ECONOMIA INTELIGENTE (ATUALIZADA: TOM DE VOZ AMIGO) ---
   const recommendedSavings = summary.income * 0.20; 
   const currentSavings = summary.income - summary.expense;
   const savingsRate = summary.income > 0 ? (currentSavings / summary.income) * 100 : 0;
@@ -67,20 +71,20 @@ export function DashboardView({
   let savingsPotential = 0;
 
   if (summary.income === 0) {
-    feedbackMessage = "Cadastre suas receitas para receber dicas de economia personalizadas.";
+    feedbackMessage = "Que tal cadastrar sua primeira receita? Assim consigo te dar dicas legais de como ver seu dinheiro crescer! 🌱";
     feedbackColor = "bg-slate-100 border-slate-200 text-slate-600";
     FeedbackIcon = Lightbulb;
   } else if (currentSavings < 0) {
-    feedbackMessage = `Cuidado! Você gastou R$ ${formatMoney(Math.abs(currentSavings))} a mais do que ganhou. Tente reduzir gastos não essenciais.`;
+    feedbackMessage = `Opa, o sinal amarelo acendeu. Seus gastos passaram R$ ${formatMoney(Math.abs(currentSavings))} do que você ganhou. Vamos rever o que dá pra segurar esse mês?`;
     feedbackColor = "bg-red-50 border-red-100 text-red-700";
     FeedbackIcon = AlertTriangle;
   } else if (currentSavings < recommendedSavings) {
     savingsPotential = recommendedSavings - currentSavings;
-    feedbackMessage = `Você poupou ${savingsRate.toFixed(0)}% da renda. Pela regra 50/30/20, tente economizar mais ${formatMoney(savingsPotential)} para atingir 20%.`;
+    feedbackMessage = `Você já guardou ${savingsRate.toFixed(0)}% do que ganhou, isso é ótimo! Se conseguir segurar mais ${formatMoney(savingsPotential)}, você atinge a meta de ouro dos 20%. Bora tentar? 🚀`;
     feedbackColor = "bg-amber-50 border-amber-100 text-amber-700";
     FeedbackIcon = PiggyBank;
   } else {
-    feedbackMessage = `Parabéns! Você está poupando ${savingsRate.toFixed(0)}% da sua renda. Esse é um ritmo excelente para construir patrimônio.`;
+    feedbackMessage = `Sensacional! Você está poupando ${savingsRate.toFixed(0)}% da sua renda. Com esse ritmo, seus sonhos estão cada vez mais perto de virar realidade. ✨`;
     feedbackColor = "bg-emerald-50 border-emerald-100 text-emerald-700";
     FeedbackIcon = CheckCircle2;
   }
@@ -98,7 +102,7 @@ export function DashboardView({
             <div className="bg-brand-600 p-2 rounded-lg shadow-lg shadow-brand-600/50">
               <Wallet className="w-7 h-7 text-white" /> 
             </div>
-            Flui
+            Flui {/* NOME ATUALIZADO */}
           </h1>
         </div>
         <nav className="flex-1 px-6 space-y-3 overflow-y-auto py-4 custom-scrollbar">
@@ -139,8 +143,13 @@ export function DashboardView({
       <main className="flex-1 overflow-y-auto relative z-0">
         <header className="bg-white/80 backdrop-blur-md sticky top-0 z-20 border-b border-slate-200 px-8 py-5 flex justify-between items-center">
           <div>
-            <h2 className="text-2xl font-extrabold text-slate-800">Visão Geral</h2>
-            <p className="text-slate-500 text-sm hidden md:block">Bem-vindo de volta! Seus dados foram carregados do servidor.</p>
+            {/* HEADER PERSONALIZADO */}
+            <h2 className="text-2xl font-extrabold text-slate-800 flex items-center gap-2">
+              Olá, {userName}! <span className="text-2xl">🌿</span>
+            </h2>
+            <p className="text-slate-500 text-sm hidden md:block mt-1">
+              Tudo pronto. Vamos fazer seu dinheiro fluir hoje?
+            </p>
           </div>
           <button onClick={() => setIsModalOpen(true)} className="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-full flex items-center gap-2 font-semibold transition-all shadow-lg shadow-brand-600/30 hover:scale-105 active:scale-95">
             <Plus size={20} /> <span className="hidden md:inline">Nova Transação</span>
@@ -242,7 +251,7 @@ export function DashboardView({
                               <p className="text-[10px] font-bold text-slate-500 whitespace-nowrap">{usage.toFixed(0)}% uso</p>
                           </div>
 
-                          {/* 2. BOTÃO DE PAGAR FATURA ADICIONADO AQUI */}
+                          {/* BOTÃO DE PAGAR FATURA */}
                           <div className="pl-4 w-full flex justify-end mt-1">
                             <PayInvoiceButton 
                                 cardId={card.id} 
