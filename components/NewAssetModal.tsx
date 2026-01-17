@@ -12,17 +12,17 @@ export function NewAssetModal({ isOpen, onClose, userId, assetToEdit }: AssetPro
   const [ticker, setTicker] = useState("");
   const [quantity, setQuantity] = useState<string | number>(""); 
   const [price, setPrice] = useState<number | undefined>(undefined);
-  const [type, setType] = useState("STOCK"); // Padrão
+  const [type, setType] = useState("STOCK"); 
   const [isLoading, setIsLoading] = useState(false);
 
-  // LISTA VIP: Esses ativos vão aparecer como sugestão para o usuário
+  // LISTA VIP: Sugestões
   const COMMON_ASSETS = [
     "MXRF11", "HGLG11", "VGHF11", "KLBN4", "KNCR11", "KNIP11", 
     "BTLG11", "CPTS11", "TRXF11", "XPML11", "TGAR11", "IRDM11",
     "PETR4", "VALE3", "ITUB4", "BBAS3", "WEGE3"
   ];
 
-  // Detecta o tipo automaticamente quando o usuário escolhe um da lista
+  // Detecta o tipo automaticamente
   useEffect(() => {
     const cleanTicker = ticker.toUpperCase().trim();
     if (cleanTicker.endsWith("11")) {
@@ -65,7 +65,7 @@ export function NewAssetModal({ isOpen, onClose, userId, assetToEdit }: AssetPro
     const payload = { 
         user_id: userId, 
         ticker: ticker.toUpperCase().trim(), 
-        name: ticker.toUpperCase().trim(), // O nome será igual ao ticker inicialmente
+        name: ticker.toUpperCase().trim(),
         quantity: qtdNumber, 
         type,
         current_amount: currentAmount
@@ -103,8 +103,6 @@ export function NewAssetModal({ isOpen, onClose, userId, assetToEdit }: AssetPro
           
           <div className="space-y-1">
              <label className="text-xs font-bold text-slate-500 uppercase ml-1">Código (Ticker)</label>
-             
-             {/* CAMPO DE TEXTO COM SUGESTÕES (DATALIST) */}
              <input 
                 type="text" 
                 list="tickers-list" 
@@ -114,11 +112,9 @@ export function NewAssetModal({ isOpen, onClose, userId, assetToEdit }: AssetPro
                 value={ticker} 
                 onChange={e => setTicker(e.target.value)} 
              />
-             {/* Aqui está a lista "fantasma" que o navegador usa para sugerir */}
              <datalist id="tickers-list">
                 {COMMON_ASSETS.map(t => <option key={t} value={t} />)}
              </datalist>
-
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -143,11 +139,8 @@ export function NewAssetModal({ isOpen, onClose, userId, assetToEdit }: AssetPro
                     decimalScale={2}
                     intlConfig={{ locale: 'pt-BR', currency: 'BRL' }}
                     onValueChange={(value) => {
-                        if (!value) {
-                            setPrice(undefined);
-                        } else {
-                            setPrice(Number(value.replace(",", ".")));
-                        }
+                        if (!value) setPrice(undefined);
+                        else setPrice(Number(value.replace(",", ".")));
                     }}
                     value={price}
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-brand-500 outline-none font-medium"
