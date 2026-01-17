@@ -4,7 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { Wallet, Loader2, ArrowRight, Mail, Lock, CheckCircle2, Eye, EyeOff, ShieldCheck } from "lucide-react";
-import { toast } from "sonner"; // Usando o sistema de notificações novo
+import { toast } from "sonner";
+// 1. IMPORTAÇÃO DO BOTÃO GOOGLE
+import { GoogleLoginButton } from "../../components/GoogleLoginButton";
 
 export default function AuthPage() {
   const router = useRouter();
@@ -12,18 +14,17 @@ export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false); // Novo: Mostrar senha
+  const [showPassword, setShowPassword] = useState(false);
 
-  // --- NOVA FUNÇÃO: Medidor de Força da Senha ---
   const getPasswordStrength = (pass: string) => {
     if (pass.length === 0) return { score: 0, label: "", color: "bg-slate-200" };
     if (pass.length < 6) return { score: 1, label: "Muito curta (min 6)", color: "bg-red-500" };
 
     let score = 0;
-    if (pass.length >= 6) score++; // Tamanho ok
-    if (/[A-Z]/.test(pass)) score++; // Tem maiúscula
-    if (/[0-9]/.test(pass)) score++; // Tem número
-    if (/[^A-Za-z0-9]/.test(pass)) score++; // Tem símbolo
+    if (pass.length >= 6) score++;
+    if (/[A-Z]/.test(pass)) score++;
+    if (/[0-9]/.test(pass)) score++;
+    if (/[^A-Za-z0-9]/.test(pass)) score++;
 
     if (score <= 1) return { score: 1, label: "Fraca", color: "bg-red-500" };
     if (score === 2) return { score: 2, label: "Média", color: "bg-yellow-500" };
@@ -37,7 +38,6 @@ export default function AuthPage() {
     e.preventDefault();
     setIsLoading(true);
 
-    // Validação mínima do Supabase (única regra obrigatória)
     if (password.length < 6) {
       toast.warning("A senha precisa ter pelo menos 6 caracteres.");
       setIsLoading(false);
@@ -45,7 +45,6 @@ export default function AuthPage() {
     }
 
     if (isLogin) {
-      // --- LOGIN ---
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         toast.error("E-mail ou senha incorretos.");
@@ -55,7 +54,6 @@ export default function AuthPage() {
         router.push("/");
       }
     } else {
-      // --- CADASTRO ---
       const { error } = await supabase.auth.signUp({
         email,
         password,
@@ -84,7 +82,6 @@ export default function AuthPage() {
         {/* CABEÇALHO */}
         <div className="bg-slate-50 p-8 pb-6 border-b border-slate-100 text-center">
           <div className="inline-flex items-center justify-center w-14 h-14 bg-brand-600 rounded-2xl shadow-lg shadow-brand-600/40 mb-4">
-            {/* Ícone muda se for cadastro ou login */}
             {isLogin ? <Wallet className="text-white w-8 h-8" /> : <ShieldCheck className="text-white w-8 h-8" />}
           </div>
           <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">Flui</h1>
@@ -95,6 +92,19 @@ export default function AuthPage() {
 
         {/* FORMULÁRIO */}
         <div className="p-8 pt-6">
+          
+          {/* 2. BOTÃO DO GOOGLE E DIVISOR */}
+          <GoogleLoginButton />
+          
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-slate-200" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase font-bold tracking-wider">
+              <span className="bg-white px-3 text-slate-400">Ou use seu e-mail</span>
+            </div>
+          </div>
+
           <form onSubmit={handleAuth} className="space-y-5">
             
             {/* E-mail */}
@@ -123,14 +133,13 @@ export default function AuthPage() {
                   <Lock className="h-5 w-5 text-slate-400 group-focus-within:text-brand-600 transition-colors" />
                 </div>
                 <input
-                  type={showPassword ? "text" : "password"} // Toggle type
+                  type={showPassword ? "text" : "password"}
                   required
                   placeholder="Sua senha secreta"
                   className="w-full pl-10 pr-12 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-slate-900 transition-all font-medium placeholder:text-slate-400"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
-                {/* Botão Olho Mágico */}
                 <button 
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
@@ -140,7 +149,7 @@ export default function AuthPage() {
                 </button>
               </div>
 
-              {/* --- MEDIDOR DE FORÇA (SÓ NO CADASTRO) --- */}
+              {/* MEDIDOR DE FORÇA */}
               {!isLogin && password.length > 0 && (
                 <div className="pt-2 px-1 animate-in fade-in slide-in-from-top-1">
                   <div className="flex gap-1 h-1.5 mb-1.5">
