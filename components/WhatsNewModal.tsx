@@ -48,7 +48,7 @@ export function WhatsNewModal() {
             <div className="bg-white/10 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-md shadow-lg border border-white/20">
                <Sparkles className="w-8 h-8 text-yellow-300 drop-shadow-md" />
             </div>
-            <h2 className="text-2xl font-extrabold tracking-tight">O FinSaaS está de cara nova!</h2>
+            <h2 className="text-2xl font-extrabold tracking-tight">O Flui está de cara nova!</h2>
             <p className="text-brand-100 font-medium mt-1">Acabamos de lançar 3 grandes novidades.</p>
           </div>
         </div>

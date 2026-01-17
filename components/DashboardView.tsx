@@ -98,7 +98,7 @@ export function DashboardView({
             <div className="bg-brand-600 p-2 rounded-lg shadow-lg shadow-brand-600/50">
               <Wallet className="w-7 h-7 text-white" /> 
             </div>
-            FinSaaS
+            Flui
           </h1>
         </div>
         <nav className="flex-1 px-6 space-y-3 overflow-y-auto py-4 custom-scrollbar">

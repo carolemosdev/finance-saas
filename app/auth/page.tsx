@@ -87,7 +87,7 @@ export default function AuthPage() {
             {/* Ícone muda se for cadastro ou login */}
             {isLogin ? <Wallet className="text-white w-8 h-8" /> : <ShieldCheck className="text-white w-8 h-8" />}
           </div>
-          <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">FinSaaS</h1>
+          <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">Flui</h1>
           <p className="text-slate-500 text-sm mt-2">
             {isLogin ? "Bem-vindo de volta! Acesse sua conta." : "Liberdade para sua senha."}
           </p>
@@ -207,7 +207,7 @@ export default function AuthPage() {
       </div>
       
       <div className="absolute bottom-6 text-slate-600 text-xs opacity-50">
-        © 2026 FinSaaS. Todos os direitos reservados.
+        © 2026 Flui. Todos os direitos reservados.
       </div>
     </div>
   );

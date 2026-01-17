@@ -34,7 +34,7 @@ export function MobileNav({ userEmail, onLogout }: MobileNavProps) {
           <div className="bg-brand-600 p-1.5 rounded-lg">
             <Wallet className="w-5 h-5 text-white" />
           </div>
-          <span className="text-xl font-extrabold text-white tracking-tight">FinSaaS</span>
+          <span className="text-xl font-extrabold text-white tracking-tight">Flui</span>
         </div>
         <button onClick={toggleMenu} className="text-slate-300 hover:text-white p-1">
           {isOpen ? <X size={28} /> : <Menu size={28} />}

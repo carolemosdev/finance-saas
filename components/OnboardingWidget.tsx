@@ -46,7 +46,7 @@ export function OnboardingWidget({ hasTransactions, hasInvestments, onOpenTransa
       
       <div className="flex justify-between items-start relative z-10">
         <div>
-          <h3 className="text-xl font-bold mb-1">Bem-vindo ao FinSaaS! 🚀</h3>
+          <h3 className="text-xl font-bold mb-1">Bem-vindo ao Flui! 🚀</h3>
           <p className="text-indigo-200 text-sm mb-4">Complete os passos abaixo para dominar suas finanças.</p>
         </div>
         <button onClick={() => setIsVisible(false)} className="text-indigo-300 hover:text-white transition-colors">
