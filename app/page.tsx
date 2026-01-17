@@ -49,10 +49,16 @@ export default async function Home() {
 
   // 3. Processamento
   const cards = rawCards.map((card) => {
-    const cardTrans = transactions.filter((t: any) => t.credit_card_id === card.id && t.type === 'EXPENSE');
-    const invoice = cardTrans.reduce((acc, curr: any) => acc + curr.amount, 0);
-    return { ...card, current_invoice: invoice };
-  });
+  // FILTRO NOVO: Só soma despesas que NÃO estão pagas (t.is_paid !== true)
+  const cardTrans = transactions.filter((t: any) => 
+    t.credit_card_id === card.id && 
+    t.type === 'EXPENSE' && 
+    !t.is_paid // <--- O SEGREDO ESTÁ AQUI
+  );
+
+  const invoice = cardTrans.reduce((acc, curr: any) => acc + curr.amount, 0);
+  return { ...card, current_invoice: invoice };
+});
 
   let totalInvested = 0;
   if (assets.length > 0) {

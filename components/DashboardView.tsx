@@ -13,6 +13,8 @@ import { SmartAlertsWidget } from "./SmartAlertsWidget";
 import { InsightsWidget } from "./InsightsWidget";
 import { MobileNav } from "./MobileNav";
 import { supabase } from "../lib/supabase";
+// 1. IMPORTAÇÃO DO BOTÃO DE PAGAMENTO
+import { PayInvoiceButton } from "./PayInvoiceButton";
 
 interface DashboardProps {
   transactions: any[];
@@ -56,7 +58,7 @@ export function DashboardView({
   };
 
   // --- LÓGICA DE ECONOMIA INTELIGENTE ---
-  const recommendedSavings = summary.income * 0.20; // Meta: 20% da renda
+  const recommendedSavings = summary.income * 0.20; 
   const currentSavings = summary.income - summary.expense;
   const savingsRate = summary.income > 0 ? (currentSavings / summary.income) * 100 : 0;
   
@@ -152,7 +154,6 @@ export function DashboardView({
             <SmartAlertsWidget balance={summary.total} transactions={transactions} cards={cards} />
             <OnboardingWidget hasTransactions={hasAnyTransaction} hasInvestments={hasAnyInvestment} onOpenTransactionModal={() => setIsModalOpen(true)} />
             
-            {/* --- NOVO: WIDGET DE FEEDBACK DE ECONOMIA --- */}
             {hasAnyTransaction && summary.income > 0 && (
               <div className={`p-5 rounded-2xl border flex items-start gap-4 shadow-sm ${feedbackColor}`}>
                 <div className="p-2 bg-white/50 rounded-xl shrink-0">
@@ -209,6 +210,8 @@ export function DashboardView({
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
             <div className="lg:col-span-2 flex flex-col gap-8">
                <InsightsWidget transactions={transactions} />
+               
+               {/* SEÇÃO DE CARTÕES */}
                {cards.length > 0 && (
                 <div className="bg-transparent">
                   <div className="flex items-center justify-between mb-4 px-1">
@@ -219,7 +222,7 @@ export function DashboardView({
                     {cards.slice(0, 2).map((card: any) => {
                       const usage = card.limit_amount > 0 ? (card.current_invoice / card.limit_amount) * 100 : 0;
                       return (
-                        <div key={card.id} className="bg-white p-5 rounded-2xl shadow-lg shadow-slate-200/50 border-0 relative overflow-hidden hover:shadow-xl transition-shadow h-40 flex flex-col justify-between">
+                        <div key={card.id} className="bg-white p-5 rounded-2xl shadow-lg shadow-slate-200/50 border-0 relative overflow-hidden hover:shadow-xl transition-shadow min-h-[11rem] flex flex-col justify-between">
                           <div className="absolute top-0 left-0 w-1.5 h-full" style={{ backgroundColor: card.color }}></div>
                           <div className="pl-4 w-full">
                             <div className="flex justify-between items-start mb-2">
@@ -231,12 +234,24 @@ export function DashboardView({
                                 <p className="text-2xl font-extrabold text-slate-900">{formatMoney(card.current_invoice)}</p>
                             </div>
                           </div>
-                          <div className="pl-4 w-full flex items-center gap-3">
+                          
+                          {/* Barra de Progresso */}
+                          <div className="pl-4 w-full flex items-center gap-3 mb-2">
                               <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
                                   <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(usage, 100)}%`, backgroundColor: card.color }}></div>
                               </div>
                               <p className="text-[10px] font-bold text-slate-500 whitespace-nowrap">{usage.toFixed(0)}% uso</p>
                           </div>
+
+                          {/* 2. BOTÃO DE PAGAR FATURA ADICIONADO AQUI */}
+                          <div className="pl-4 w-full flex justify-end mt-1">
+                            <PayInvoiceButton 
+                                cardId={card.id} 
+                                invoiceAmount={card.current_invoice} 
+                                userId={userId} 
+                            />
+                          </div>
+
                         </div>
                       );
                     })}
