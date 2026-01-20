@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { 
   Wallet, TrendingUp, TrendingDown, Briefcase, Plus, 
-  ArrowUpRight, CreditCard, ArrowRight, LogOut, Lightbulb, PiggyBank, AlertTriangle, CheckCircle2
+  ArrowUpRight, CreditCard, ArrowRight, LogOut, Lightbulb, 
+  PiggyBank, AlertTriangle, CheckCircle2, Eye, EyeOff // <--- IMPORTAMOS OS OLHINHOS
 } from "lucide-react";
 import { NewTransactionModal } from "./NewTransactionModal";
 import { ExpenseChart } from "./ExpenseChart";
@@ -45,10 +46,20 @@ export function DashboardView({
   const router = useRouter();
   const [isModalOpen, setIsModalOpen] = useState(false);
   
-  // 1. Extrai o nome do usuário para ser mais íntimo
+  // 1. NOVO ESTADO: Controla a visibilidade dos valores (Começa visível)
+  const [areValuesVisible, setAreValuesVisible] = useState(true);
+
   const userName = userEmail?.split("@")[0] || "Pessoa Incrível";
 
   const formatMoney = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
+  // 2. NOVA FUNÇÃO MÁGICA: Decide o que mostrar na tela
+  const displayValue = (value: number) => {
+    if (areValuesVisible) {
+      return formatMoney(value);
+    }
+    return "••••••"; // O "borrão" de privacidade
+  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -60,7 +71,7 @@ export function DashboardView({
     router.refresh(); 
   };
 
-  // --- LÓGICA DE ECONOMIA INTELIGENTE (ATUALIZADA: TOM DE VOZ AMIGO) ---
+  // --- LÓGICA DE ECONOMIA ---
   const recommendedSavings = summary.income * 0.20; 
   const currentSavings = summary.income - summary.expense;
   const savingsRate = summary.income > 0 ? (currentSavings / summary.income) * 100 : 0;
@@ -75,12 +86,12 @@ export function DashboardView({
     feedbackColor = "bg-slate-100 border-slate-200 text-slate-600";
     FeedbackIcon = Lightbulb;
   } else if (currentSavings < 0) {
-    feedbackMessage = `Opa, o sinal amarelo acendeu. Seus gastos passaram R$ ${formatMoney(Math.abs(currentSavings))} do que você ganhou. Vamos rever o que dá pra segurar esse mês?`;
+    feedbackMessage = `Opa, o sinal amarelo acendeu. Seus gastos passaram ${displayValue(Math.abs(currentSavings))} do que você ganhou. Vamos rever o que dá pra segurar esse mês?`;
     feedbackColor = "bg-red-50 border-red-100 text-red-700";
     FeedbackIcon = AlertTriangle;
   } else if (currentSavings < recommendedSavings) {
     savingsPotential = recommendedSavings - currentSavings;
-    feedbackMessage = `Você já guardou ${savingsRate.toFixed(0)}% do que ganhou, isso é ótimo! Se conseguir segurar mais ${formatMoney(savingsPotential)}, você atinge a meta de ouro dos 20%. Bora tentar? 🚀`;
+    feedbackMessage = `Você já guardou ${savingsRate.toFixed(0)}% do que ganhou, isso é ótimo! Se conseguir segurar mais ${displayValue(savingsPotential)}, você atinge a meta de ouro dos 20%. Bora tentar? 🚀`;
     feedbackColor = "bg-amber-50 border-amber-100 text-amber-700";
     FeedbackIcon = PiggyBank;
   } else {
@@ -102,7 +113,7 @@ export function DashboardView({
             <div className="bg-brand-600 p-2 rounded-lg shadow-lg shadow-brand-600/50">
               <Wallet className="w-7 h-7 text-white" /> 
             </div>
-            Flui {/* NOME ATUALIZADO */}
+            Flui
           </h1>
         </div>
         <nav className="flex-1 px-6 space-y-3 overflow-y-auto py-4 custom-scrollbar">
@@ -143,9 +154,18 @@ export function DashboardView({
       <main className="flex-1 overflow-y-auto relative z-0">
         <header className="bg-white/80 backdrop-blur-md sticky top-0 z-20 border-b border-slate-200 px-8 py-5 flex justify-between items-center">
           <div>
-            {/* HEADER PERSONALIZADO */}
-            <h2 className="text-2xl font-extrabold text-slate-800 flex items-center gap-2">
+            <h2 className="text-2xl font-extrabold text-slate-800 flex items-center gap-3">
               Olá, {userName}! <span className="text-2xl">🌿</span>
+              
+              {/* 3. BOTÃO DE TOGGLE VISIBILIDADE */}
+              <button 
+                onClick={() => setAreValuesVisible(!areValuesVisible)}
+                className="ml-2 p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-colors"
+                title={areValuesVisible ? "Ocultar valores" : "Mostrar valores"}
+              >
+                {areValuesVisible ? <Eye size={20} /> : <EyeOff size={20} />}
+              </button>
+
             </h2>
             <p className="text-slate-500 text-sm hidden md:block mt-1">
               Tudo pronto. Vamos fazer seu dinheiro fluir hoje?
@@ -174,7 +194,8 @@ export function DashboardView({
                    </p>
                    {savingsPotential > 0 && (
                      <p className="text-xs font-bold mt-2 uppercase tracking-wide opacity-80">
-                        Potencial de economia extra: {formatMoney(savingsPotential)}
+                        {/* Usei o displayValue aqui também */}
+                        Potencial de economia extra: {displayValue(savingsPotential)}
                      </p>
                    )}
                 </div>
@@ -182,12 +203,17 @@ export function DashboardView({
             )}
           </div>
 
-          {/* CARDS DE RESUMO */}
+          {/* CARDS DE RESUMO COM VALORES PROTEGIDOS */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-200/60 border-0 relative overflow-hidden transition-transform hover:-translate-y-1">
               <div className="absolute top-0 right-0 -mr-12 -mt-12 w-32 h-32 bg-brand-50 rounded-full blur-3xl opacity-70"></div>
               <div className="flex justify-between items-start relative">
-                <div><p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Saldo Total</p><h3 className={`text-3xl font-extrabold mt-3 ${summary.total >= 0 ? 'text-slate-900' : 'text-red-600'}`}>{formatMoney(summary.total)}</h3></div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Saldo Total</p>
+                  <h3 className={`text-3xl font-extrabold mt-3 ${summary.total >= 0 ? 'text-slate-900' : 'text-red-600'}`}>
+                    {displayValue(summary.total)}
+                  </h3>
+                </div>
                 <div className="p-3 bg-brand-100 text-brand-600 rounded-2xl shadow-sm"><Wallet size={28} /></div>
               </div>
             </div>
@@ -195,21 +221,36 @@ export function DashboardView({
             <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-200/60 border-0 relative overflow-hidden transition-transform hover:-translate-y-1">
               <div className="absolute top-0 right-0 -mr-12 -mt-12 w-32 h-32 bg-purple-50 rounded-full blur-3xl opacity-70"></div>
               <div className="flex justify-between items-start relative">
-                <div><p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Investido</p><h3 className="text-3xl font-extrabold mt-3 text-purple-900">{formatMoney(totalInvested)}</h3></div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Investido</p>
+                  <h3 className="text-3xl font-extrabold mt-3 text-purple-900">
+                    {displayValue(totalInvested)}
+                  </h3>
+                </div>
                 <div className="p-3 bg-purple-100 text-purple-600 rounded-2xl shadow-sm"><Briefcase size={28} /></div>
               </div>
             </div>
 
             <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-200/60 border-0 transition-transform hover:-translate-y-1">
               <div className="flex justify-between items-start">
-                <div><p className="text-sm font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1">Entradas <span className="text-[10px] bg-green-100 text-green-700 px-1.5 rounded font-bold">MÊS</span></p><h3 className="text-3xl font-extrabold text-emerald-600 mt-3">{formatMoney(summary.income)}</h3></div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1">Entradas <span className="text-[10px] bg-green-100 text-green-700 px-1.5 rounded font-bold">MÊS</span></p>
+                  <h3 className="text-3xl font-extrabold text-emerald-600 mt-3">
+                    {displayValue(summary.income)}
+                  </h3>
+                </div>
                 <div className="p-3 bg-emerald-100 text-emerald-600 rounded-2xl shadow-sm"><ArrowUpRight size={28} /></div>
               </div>
             </div>
 
             <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-200/60 border-0 transition-transform hover:-translate-y-1">
               <div className="flex justify-between items-start">
-                <div><p className="text-sm font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1">Saídas <span className="text-[10px] bg-red-100 text-red-700 px-1.5 rounded font-bold">MÊS</span></p><h3 className="text-3xl font-extrabold text-rose-600 mt-3">{formatMoney(summary.expense)}</h3></div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1">Saídas <span className="text-[10px] bg-red-100 text-red-700 px-1.5 rounded font-bold">MÊS</span></p>
+                  <h3 className="text-3xl font-extrabold text-rose-600 mt-3">
+                    {displayValue(summary.expense)}
+                  </h3>
+                </div>
                 <div className="p-3 bg-rose-100 text-rose-600 rounded-2xl shadow-sm"><TrendingDown size={28} /></div>
               </div>
             </div>
@@ -219,7 +260,7 @@ export function DashboardView({
             <div className="lg:col-span-2 flex flex-col gap-8">
                <InsightsWidget transactions={transactions} />
                
-               {/* SEÇÃO DE CARTÕES */}
+               {/* SEÇÃO DE CARTÕES (PROTEGIDA) */}
                {cards.length > 0 && (
                 <div className="bg-transparent">
                   <div className="flex items-center justify-between mb-4 px-1">
@@ -239,7 +280,9 @@ export function DashboardView({
                             </div>
                             <div>
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fatura Atual</p>
-                                <p className="text-2xl font-extrabold text-slate-900">{formatMoney(card.current_invoice)}</p>
+                                <p className="text-2xl font-extrabold text-slate-900">
+                                  {displayValue(card.current_invoice)}
+                                </p>
                             </div>
                           </div>
                           
@@ -251,7 +294,6 @@ export function DashboardView({
                               <p className="text-[10px] font-bold text-slate-500 whitespace-nowrap">{usage.toFixed(0)}% uso</p>
                           </div>
 
-                          {/* BOTÃO DE PAGAR FATURA */}
                           <div className="pl-4 w-full flex justify-end mt-1">
                             <PayInvoiceButton 
                                 cardId={card.id} 
@@ -293,7 +335,9 @@ export function DashboardView({
                         <td className="p-5"><p className="text-slate-900 font-bold">{t.description}</p></td>
                         <td className="p-5"><span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider">{t.categories?.name || "Geral"}</span></td>
                         <td className="p-5 text-slate-500 text-sm font-medium">{new Date(t.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</td>
-                        <td className={`p-5 text-right font-extrabold ${t.type === 'INCOME' ? 'text-emerald-600' : 'text-rose-600'}`}>{t.type === 'INCOME' ? '+' : '-'} {formatMoney(t.amount)}</td>
+                        <td className={`p-5 text-right font-extrabold ${t.type === 'INCOME' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {t.type === 'INCOME' ? '+' : '-'} {displayValue(t.amount)}
+                        </td>
                       </tr>
                     ))}
                     {transactions.length === 0 && <tr><td colSpan={4} className="p-12 text-center text-slate-500">Nenhuma transação encontrada.</td></tr>}
