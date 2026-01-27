@@ -25,6 +25,7 @@ type PlanningItem = {
   id: string | number;
   name: string;
   planned: number;     
+  isFixed?: boolean; // Opcional para evitar erros se não vier do banco
   realized: MonthlyValue; 
 };
 
@@ -93,11 +94,11 @@ export default function PlanningPage() {
     const { data: categories } = await supabase.from('categories').select('*').eq('user_id', user.id);
     const { data: transactions } = await supabase.from('transactions').select('amount, type, date, category_id').eq('user_id', user.id);
 
-    // Garante que só processa se houver categorias
     if (categories) {
       processRealData(categories, transactions || []);
     } else {
-      setExpenses([]); // Zera se não houver categorias
+      setExpenses([]); 
+      setIncomes([]);
     }
     setLoading(false);
   };
@@ -107,21 +108,28 @@ export default function PlanningPage() {
   // 3. Processamento e FILTRO RIGOROSO
   const processRealData = (categoriesDb: any[], transactionsDb: any[]) => {
     
-    // A. Mapeia categorias
+    // A. Mapeia CATEGORIAS DE DESPESA
     const expensesMap: ExpenseCategory[] = categoriesDb.filter(c => c.type === 'EXPENSE').map(c => ({
       id: c.id, 
       name: c.name, 
-      planned: Number(c.budget) || 0, // Garante que é número
+      planned: Number(c.budget) || 0,
       realized: {}, 
       subcategories: [] 
     }));
 
-    const incomesList: PlanningItem[] = [{ id: 'salary', name: "Receitas / Entradas", planned: 0, realized: {} }];
+    // B. Mapeia CATEGORIAS DE RECEITA (NOVO: Agora dinâmico igual despesas)
+    const incomesMap: PlanningItem[] = categoriesDb.filter(c => c.type === 'INCOME').map(c => ({
+      id: c.id,
+      name: c.name,
+      planned: Number(c.budget) || 0,
+      isFixed: false, 
+      realized: {}
+    }));
 
-    // B. Preenche Valores
+    // C. Preenche Valores (Distribui nos meses corretos)
     transactionsDb.forEach(t => {
       const date = new Date(t.date);
-      // Ajuste de fuso para evitar erro de dia anterior
+      // Ajuste de fuso horário
       const userTimezoneOffset = date.getTimezoneOffset() * 60000;
       const adjustedDate = new Date(date.getTime() + userTimezoneOffset);
       const monthKey = ALL_MONTH_KEYS[adjustedDate.getMonth()];
@@ -132,24 +140,26 @@ export default function PlanningPage() {
           cat.realized[monthKey] = (cat.realized[monthKey] || 0) + Number(t.amount);
         }
       } else if (t.type === 'INCOME') {
-        incomesList[0].realized[monthKey] = (incomesList[0].realized[monthKey] || 0) + Number(t.amount);
+        // Agora busca a categoria específica de receita
+        const cat = incomesMap.find(c => c.id === t.category_id);
+        if (cat) {
+          cat.realized[monthKey] = (cat.realized[monthKey] || 0) + Number(t.amount);
+        }
       }
     });
 
-    // C. O FILTRO MATADOR: Remove categorias "fantasmas"
-    const activeExpenses = expensesMap.filter(cat => {
-       // Verifica se existe ALGUM valor maior que zero em QUALQUER mês
-       const totalRealized = Object.values(cat.realized).reduce((acc, val) => acc + val, 0);
-       
-       // Verifica se existe meta
-       const hasPlanned = cat.planned > 0;
+    // D. O FILTRO MATADOR: Remove categorias "fantasmas"
+    // Função auxiliar para verificar se a categoria deve aparecer
+    const shouldShow = (cat: any) => {
+        const totalRealized = Object.values(cat.realized as MonthlyValue).reduce((acc, val) => acc + val, 0);
+        return totalRealized > 0 || cat.planned > 0;
+    };
 
-       // SÓ FICA SE TIVER DINHEIRO ENVOLVIDO
-       return totalRealized > 0 || hasPlanned;
-    });
+    const activeExpenses = expensesMap.filter(shouldShow);
+    const activeIncomes = incomesMap.filter(shouldShow);
 
     setExpenses(activeExpenses);
-    setIncomes(incomesList);
+    setIncomes(activeIncomes);
   };
 
   // --- Helpers e Handlers ---
@@ -174,8 +184,7 @@ export default function PlanningPage() {
       const value = parseFloat(val) || 0;
       if (typeof id === 'number' || !isNaN(Number(id))) {
         await supabase.from('categories').update({ budget: value }).eq('id', id);
-        // Recarrega para garantir que o filtro não esconda a categoria se o valor mudar
-        if (value > 0) loadData(); 
+        if (value > 0) loadData(); // Recarrega se definiu meta, para garantir que apareça
       }
   };
 
@@ -265,10 +274,14 @@ export default function PlanningPage() {
                       <td className="p-4 pl-10 sticky left-0 bg-white group-hover:bg-slate-50 z-10 border-r border-slate-100 flex items-center gap-2">
                         {item.name}
                       </td>
+                      {/* Meta Receita */}
                       <td className="p-0 relative bg-amber-50/30">
                         <div className="absolute inset-0 m-1">
-                          <input type="number" value={item.planned || ''} onChange={(e) => handleMetaChange('income', item.id, e.target.value)}
-                            className="w-full h-full text-right bg-transparent focus:bg-white focus:ring-2 focus:ring-emerald-500 rounded-md px-3 font-bold text-slate-700 outline-none" placeholder="0,00" />
+                          <input type="number" 
+                            value={item.planned || ''} 
+                            onChange={(e) => handleMetaChange('income', item.id, e.target.value)}
+                            onBlur={(e) => handleMetaBlur(item.id, e.target.value)}
+                            className="w-full h-full text-right bg-transparent focus:bg-white focus:ring-2 focus:ring-emerald-500 rounded-md px-3 font-bold text-slate-700 outline-none placeholder:text-slate-300" placeholder="0,00" />
                         </div>
                       </td>
                       <td className="p-4 text-center text-xs text-slate-400">{formatPercent(item.planned, totalIncomePlanned)}</td>
@@ -298,23 +311,25 @@ export default function PlanningPage() {
                            {category.name}
                         </td>
                         
+                        {/* Meta Despesa */}
                         <td className="p-0 relative bg-amber-50/30">
                            <div className="absolute inset-0 m-1">
                              <input type="number" 
                                value={category.planned || ''} 
                                onChange={(e) => handleMetaChange('expense', category.id, e.target.value)}
                                onBlur={(e) => handleMetaBlur(category.id, e.target.value)}
-                               className="w-full h-full text-right bg-transparent focus:bg-white focus:ring-2 focus:ring-rose-500 rounded-md px-3 font-bold text-slate-800 outline-none" placeholder="0,00" />
+                               className="w-full h-full text-right bg-transparent focus:bg-white focus:ring-2 focus:ring-rose-500 rounded-md px-3 font-bold text-slate-800 outline-none placeholder:text-slate-300" placeholder="0,00" />
                            </div>
                         </td>
                         
                         <td className="p-4 text-center text-xs text-slate-500">{formatPercent(catPlanned, totalExpensePlanned)}</td>
                         
+                        {/* Meses Despesa */}
                         {visibleMonths.map((month, index) => {
                           const val = category.realized[month] || 0;
                           const isOverBudget = category.planned > 0 && val > category.planned;
                           return (
-                            <td key={month} className={`p-4 text-right transition-colors ${isOverBudget ? 'text-rose-600 font-bold' : 'text-slate-600'}`}>
+                            <td key={month} className={`p-4 text-right transition-colors ${isOverBudget ? 'text-red-600 font-bold' : 'text-slate-600'}`}>
                               {formatMoney(val)}
                             </td>
                           );
@@ -323,12 +338,12 @@ export default function PlanningPage() {
                     );
                   })}
                   
-                  {expenses.length === 0 && !loading && (
+                  {expenses.length === 0 && incomes.length === 0 && !loading && (
                     <tr>
                       <td colSpan={3 + visibleMonths.length} className="p-12 text-center text-slate-400 italic">
                         <div className="flex flex-col items-center gap-2">
                            <AlertCircle className="text-slate-300" size={32}/>
-                           <p>Nenhuma despesa encontrada.</p>
+                           <p>Nenhuma movimentação ou meta encontrada.</p>
                            <a href="/" className="text-brand-600 hover:underline text-sm font-bold bg-brand-50 px-3 py-1 rounded-full mt-1 inline-block">Criar transação no Dashboard</a>
                         </div>
                       </td>
