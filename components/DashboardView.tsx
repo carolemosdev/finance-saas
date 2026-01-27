@@ -1,26 +1,36 @@
 "use client";
-
+import { supabase } from "../lib/supabase";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { 
-  Wallet, TrendingUp, TrendingDown, Briefcase, Plus, 
-  ArrowUpRight, CreditCard, ArrowRight, LogOut, Lightbulb, 
-  PiggyBank, AlertTriangle, CheckCircle2, Eye, EyeOff // <--- IMPORTAMOS OS OLHINHOS
-} from "lucide-react";
-import { NewTransactionModal } from "./NewTransactionModal";
-import { ExpenseChart } from "./ExpenseChart";
-import { OnboardingWidget } from "./OnboardingWidget";
-import { SmartAlertsWidget } from "./SmartAlertsWidget";
-import { InsightsWidget } from "./InsightsWidget";
-import { MobileNav } from "./MobileNav";
-import { supabase } from "../lib/supabase";
-import { PayInvoiceButton } from "./PayInvoiceButton";
 import { WhatsNewModal } from "./WhatsNewModal";
+// --- ADICIONEI ESTES IMPORTS QUE FALTAVAM ---
+import { SmartAlertsWidget } from "./SmartAlertsWidget";
+import { OnboardingWidget } from "./OnboardingWidget";
+import { InsightsWidget } from "./InsightsWidget";
+import { ExpenseChart } from "./ExpenseChart";
+import { NewTransactionModal } from "./NewTransactionModal";
+import { PayInvoiceButton } from "./PayInvoiceButton"; // Certifique-se que este arquivo existe, senão remova esta linha
+// --------------------------------------------
+
 import { 
-  Wallet, TrendingUp, TrendingDown, Briefcase, Plus, 
-  ArrowUpRight, CreditCard, ArrowRight, LogOut, Lightbulb, 
-  PiggyBank, AlertTriangle, CheckCircle2, Eye, EyeOff,
-  Target 
+  Wallet, 
+  TrendingUp, 
+  TrendingDown, 
+  Briefcase, 
+  Plus, 
+  ArrowUpRight, 
+  CreditCard, 
+  ArrowRight, 
+  LogOut, 
+  Lightbulb, 
+  PiggyBank, 
+  AlertTriangle, 
+  CheckCircle2, 
+  Eye, 
+  EyeOff,
+  Target,
+  Menu,
+  X
 } from "lucide-react";
 
 interface DashboardProps {
@@ -139,7 +149,7 @@ export function DashboardView({
              <Briefcase size={20} /> Investimentos
           </a>
           <a href="/planning" className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group text-slate-400 hover:bg-slate-800 hover:text-white">
-            <Target size={20} /> Planejamento {/* Importe o ícone Target do lucide-react */}
+            <Target size={20} /> Planejamento
           </a>
           <a href="/credit-cards" className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group text-slate-400 hover:bg-slate-800 hover:text-white">
              <CreditCard size={20} /> Cartões
@@ -363,6 +373,56 @@ export function DashboardView({
         userId={userId} 
       />
       <WhatsNewModal />
+    </div>
+  );
+}
+
+function MobileNav({ userEmail, onLogout }: { userEmail: string | null, onLogout: () => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center shadow-lg sticky top-0 z-50">
+      <div className="flex items-center gap-2">
+        <div className="bg-brand-500 p-1.5 rounded-lg">
+           <Wallet className="text-white w-5 h-5" />
+        </div>
+        <span className="font-bold text-lg tracking-tight">Flui</span>
+      </div>
+
+      <button onClick={() => setIsOpen(!isOpen)} className="p-2 hover:bg-slate-800 rounded-lg transition-colors">
+        {isOpen ? <X size={24} /> : <Menu size={24} />}
+      </button>
+
+      {/* Menu Dropdown */}
+      {isOpen && (
+        <div className="absolute top-full left-0 right-0 bg-slate-900 border-t border-slate-800 shadow-2xl animate-in slide-in-from-top-2">
+          <div className="p-4 space-y-4">
+            
+            <div className="px-4 py-3 bg-slate-800/50 rounded-xl border border-slate-700">
+               <p className="text-xs text-slate-400 uppercase font-bold mb-1">Logado como</p>
+               <p className="text-sm font-medium truncate text-white">{userEmail}</p>
+            </div>
+
+            <nav className="flex flex-col gap-2">
+               <a href="/" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-all">
+                 <Briefcase size={18} /> Visão Geral
+               </a>
+               <a href="/planning" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-all">
+                 <Target size={18} /> Planejamento
+               </a>
+            </nav>
+
+            <div className="h-px bg-slate-800 my-2"></div>
+
+            <button 
+              onClick={onLogout}
+              className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-xl transition-all font-medium"
+            >
+              <LogOut size={18} /> Sair do Sistema
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
