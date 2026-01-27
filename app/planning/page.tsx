@@ -5,11 +5,18 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { 
   Wallet, Briefcase, Target, CreditCard, LogOut, 
-  Menu, Eye, EyeOff, ChevronDown, ChevronRight, Settings,
-  TrendingUp, Plus, Trash2, Loader2, Calendar, AlertCircle
+  Eye, EyeOff, ChevronDown, ChevronRight, Settings,
+  Loader2, Calendar, TrendingUp, TrendingDown
 } from "lucide-react";
 import { MobileNav } from "../../components/MobileNav"; 
 import { toast } from "sonner"; 
+
+// --- CONFIGURAÇÃO ---
+const ALL_MONTH_KEYS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const MONTH_LABELS: { [key: string]: string } = { 
+  'jan': 'JAN', 'fev': 'FEV', 'mar': 'MAR', 'abr': 'ABR', 'mai': 'MAI', 'jun': 'JUN',
+  'jul': 'JUL', 'ago': 'AGO', 'set': 'SET', 'out': 'OUT', 'nov': 'NOV', 'dez': 'DEZ'
+};
 
 // --- TIPAGEM ---
 type MonthlyValue = { [month: string]: number };
@@ -17,9 +24,8 @@ type MonthlyValue = { [month: string]: number };
 type PlanningItem = {
   id: string | number;
   name: string;
-  planned: number;     // Meta (Manual)
-  isFixed: boolean;
-  realized: MonthlyValue; // Realizado (Automático do Banco)
+  planned: number;     
+  realized: MonthlyValue; 
 };
 
 type ExpenseCategory = {
@@ -30,14 +36,7 @@ type ExpenseCategory = {
   subcategories: PlanningItem[];
 };
 
-// Configuração dos 12 meses para a lógica de rotação
-const ALL_MONTH_KEYS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-const MONTH_LABELS: { [key: string]: string } = { 
-  'jan': 'JAN', 'fev': 'FEV', 'mar': 'MAR', 'abr': 'ABR', 'mai': 'MAI', 'jun': 'JUN',
-  'jul': 'JUL', 'ago': 'AGO', 'set': 'SET', 'out': 'OUT', 'nov': 'NOV', 'dez': 'DEZ'
-};
-
-// --- SIDEBAR ---
+// --- SIDEBAR (Mantendo padrão) ---
 function Sidebar({ userEmail, onLogout }: any) {
   return (
     <aside className="w-72 bg-slate-900 hidden md:flex flex-col shadow-2xl z-10 relative shrink-0">
@@ -70,9 +69,11 @@ export default function PlanningPage() {
   const [incomes, setIncomes] = useState<PlanningItem[]>([]);
   const [expenses, setExpenses] = useState<ExpenseCategory[]>([]);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  
+  // Meses visíveis na tabela (Janela Deslizante)
   const [visibleMonths, setVisibleMonths] = useState<string[]>([]);
 
-  // 1. Definição da Janela de Tempo (Mês Atual + 5 Futuros)
+  // 1. Configurar Janela de Tempo (Mês Atual + 5)
   useEffect(() => {
     const today = new Date();
     const currentMonthIndex = today.getMonth(); 
@@ -84,7 +85,7 @@ export default function PlanningPage() {
     setVisibleMonths(nextMonths);
   }, []);
 
-  // 2. Busca de Dados Reais
+  // 2. Buscar Dados Reais
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
@@ -96,55 +97,58 @@ export default function PlanningPage() {
       const { data: transactions } = await supabase.from('transactions').select('amount, type, date, category_id').eq('user_id', user.id);
       const { data: categories } = await supabase.from('categories').select('*').eq('user_id', user.id);
 
-      if (transactions && categories) processRealData(categories, transactions);
+      if (categories) {
+        processRealData(categories, transactions || []);
+      }
       setLoading(false);
     };
     loadData();
   }, [router]);
 
-  // 3. Processamento e Preenchimento Automático
+  // 3. Processamento Lógico
   const processRealData = (categoriesDb: any[], transactionsDb: any[]) => {
-    // A. Cria a estrutura base das despesas com as categorias do usuário
+    // A. Mapear Categorias de Despesa
     const expensesMap: ExpenseCategory[] = categoriesDb.filter(c => c.type === 'EXPENSE').map(c => ({
       id: c.id, 
       name: c.name, 
-      planned: 0, // Poderia vir de uma coluna 'budget' no futuro
-      realized: {}, // Objeto vazio para ser preenchido
+      planned: 0, // Inicia zerado, usuário edita
+      realized: {}, 
       subcategories: [] 
     }));
 
-    // B. Cria estrutura para receitas
-    const incomesList: PlanningItem[] = [{ id: 'salary', name: "Receitas / Entradas", planned: 0, isFixed: true, realized: {} }];
+    // B. Mapear Receita
+    const incomesList: PlanningItem[] = [{ id: 'salary', name: "Receitas / Entradas", planned: 0, realized: {} }];
 
-    // C. Distribui as transações nos meses corretos
+    // C. Distribuir Transações nos Meses
     transactionsDb.forEach(t => {
-      const date = new Date(t.date);
-      // Ajuste de fuso horário simples para garantir o mês correto
-      const monthKey = ALL_MONTH_KEYS[date.getUTCMonth()]; 
+      // Ajuste de fuso horário para garantir que dia 31 não vire dia 1 do outro mês
+      const dateParts = t.date.split('-'); 
+      const year = parseInt(dateParts[0]);
+      const monthIndex = parseInt(dateParts[1]) - 1; // Mês no JS começa em 0
+      
+      const monthKey = ALL_MONTH_KEYS[monthIndex];
 
       if (t.type === 'EXPENSE') {
         const cat = expensesMap.find(c => c.id === t.category_id);
         if (cat) {
-          // Soma o valor na chave do mês correspondente (ex: 'jan', 'fev')
-          cat.realized[monthKey] = (cat.realized[monthKey] || 0) + t.amount;
+          cat.realized[monthKey] = (cat.realized[monthKey] || 0) + Number(t.amount);
         }
       } else if (t.type === 'INCOME') {
-        incomesList[0].realized[monthKey] = (incomesList[0].realized[monthKey] || 0) + t.amount;
+        incomesList[0].realized[monthKey] = (incomesList[0].realized[monthKey] || 0) + Number(t.amount);
       }
     });
 
-    // D. Filtro: Mostra apenas categorias que têm Movimentação (realized) OU Meta (planned)
+    // Filtro: Mostra apenas o que tem movimento ou meta
     const activeExpenses = expensesMap.filter(cat => {
        const hasRealized = Object.values(cat.realized).some(v => v > 0);
-       const hasPlanned = cat.planned > 0;
-       return hasRealized || hasPlanned;
+       return cat.planned >= 0 || hasRealized; // Mostra todos por padrão para editar
     });
 
     setExpenses(activeExpenses);
     setIncomes(incomesList);
   };
 
-  // --- Funções de Cálculo e Interface ---
+  // --- Funções Auxiliares ---
   const calculateCategoryTotal = (cat: ExpenseCategory, type: 'planned' | string) => {
     if (type === 'planned') return cat.planned;
     return cat.realized[type] || 0;
@@ -179,16 +183,16 @@ export default function PlanningPage() {
         <header className="bg-white/80 backdrop-blur-md sticky top-0 z-20 border-b border-slate-200 px-8 py-5 flex justify-between items-center">
           <div>
             <h2 className="text-2xl font-extrabold text-slate-800 flex items-center gap-3">
-              Planejamento Dinâmico
+              Planejamento e Controle
               <button onClick={() => setAreValuesVisible(!areValuesVisible)} className="ml-2 p-2 rounded-full hover:bg-slate-100 text-slate-400">
                 {areValuesVisible ? <Eye size={20} /> : <EyeOff size={20} />}
               </button>
             </h2>
             <p className="text-sm text-slate-500 flex items-center gap-1 mt-1">
-               <Calendar size={14}/> Dados sincronizados automaticamente com suas transações
+               <Calendar size={14}/> Sincronizado com suas transações
             </p>
           </div>
-          {loading && <div className="flex items-center gap-2 text-brand-600 text-sm font-bold animate-pulse"><Loader2 className="animate-spin" size={16}/> Sincronizando...</div>}
+          {loading && <div className="flex items-center gap-2 text-brand-600 text-sm font-bold animate-pulse"><Loader2 className="animate-spin" size={16}/> Atualizando...</div>}
         </header>
 
         <div className="p-4 md:p-8 max-w-full mx-auto">
@@ -196,13 +200,13 @@ export default function PlanningPage() {
             <div className="overflow-x-auto pb-4">
               <table className="w-full text-left border-collapse min-w-[1200px]">
                 
-                {/* --- HEADER FIXO --- */}
                 <thead>
-                  {/* Linha de Saldo */}
-                  <tr className="bg-slate-50/80">
+                  {/* LINHA DE SALDO (Topo fora da lista) */}
+                  <tr className="bg-slate-50">
                     <th className="p-4 pl-6 text-xs font-extrabold text-slate-500 uppercase tracking-wider border-b border-slate-200 bg-slate-50 sticky left-0 z-20 h-[60px] flex items-center">
-                      Saldo Realizado
+                      SALDO REALIZADO
                     </th>
+                    {/* Espaços vazios para alinhar com Planejamento e % */}
                     <th className="border-b border-slate-200 bg-slate-50 min-w-[140px]"></th> 
                     <th className="border-b border-slate-200 bg-slate-50 min-w-[60px]"></th>
 
@@ -210,7 +214,7 @@ export default function PlanningPage() {
                       const bal = getMonthlyBalance(month);
                       const isCurrent = index === 0;
                       return (
-                        <th key={month} className={`p-4 text-right border-b border-slate-200 min-w-[120px] ${isCurrent ? 'bg-blue-50/30' : ''}`}>
+                        <th key={month} className={`p-4 text-right border-b border-slate-200 min-w-[120px] ${isCurrent ? 'bg-blue-50/20' : ''}`}>
                            <span className={`text-lg font-extrabold ${bal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                              {formatMoney(bal)}
                            </span>
@@ -219,15 +223,15 @@ export default function PlanningPage() {
                     })}
                   </tr>
 
-                  {/* Linha de Títulos */}
+                  {/* LINHA DE TÍTULOS */}
                   <tr className="bg-slate-100 text-slate-600 text-xs uppercase tracking-wider font-bold">
-                    <th className="p-4 pl-6 sticky left-0 bg-slate-100 z-10 border-b border-slate-200 min-w-[280px]">Categorias</th>
-                    <th className="p-4 text-right text-amber-700 bg-amber-50 border-x border-amber-100 min-w-[140px] border-b border-slate-200">PLANEJAMENTO</th>
+                    <th className="p-4 pl-6 sticky left-0 bg-slate-100 z-10 border-b border-slate-200 min-w-[280px]">CATEGORIAS</th>
+                    <th className="p-4 text-right text-amber-700 bg-orange-50 border-x border-orange-100 min-w-[140px] border-b border-slate-200">PLANEJAMENTO</th>
                     <th className="p-4 text-center min-w-[60px] border-b border-slate-200">%</th>
                     
                     {visibleMonths.map((month, index) => (
-                      <th key={month} className={`p-4 text-right min-w-[120px] whitespace-nowrap border-b border-slate-200 ${index === 0 ? 'text-brand-600 font-extrabold' : ''}`}>
-                         {MONTH_LABELS[month]} {index === 0 && <span className="ml-1 text-[9px] bg-brand-600 text-white px-1.5 py-0.5 rounded-full relative -top-0.5">VIGENTE</span>}
+                      <th key={month} className={`p-4 text-right min-w-[120px] whitespace-nowrap border-b border-slate-200 ${index === 0 ? 'text-purple-600 font-extrabold' : ''}`}>
+                         {MONTH_LABELS[month]} {index === 0 && <span className="ml-1 text-[9px] bg-purple-600 text-white px-1.5 py-0.5 rounded-full relative -top-0.5">VIGENTE</span>}
                       </th>
                     ))}
                   </tr>
@@ -245,18 +249,20 @@ export default function PlanningPage() {
                   
                   {incomes.map(item => (
                     <tr key={item.id} className="hover:bg-slate-50 transition-colors font-medium text-slate-700">
-                      <td className="p-4 pl-10 sticky left-0 bg-white group-hover:bg-slate-50 z-10 border-r border-slate-100">
+                      <td className="p-4 pl-10 sticky left-0 bg-white group-hover:bg-slate-50 z-10 border-r border-slate-100 flex items-center gap-2">
                         {item.name}
                       </td>
-                      <td className="p-0 relative bg-amber-50/20">
+                      {/* INPUT PLANEJAMENTO */}
+                      <td className="p-0 relative bg-orange-50/30">
                         <div className="absolute inset-0 m-1">
                           <input type="number" value={item.planned || ''} onChange={(e) => handleMetaChange('income', item.id, e.target.value)}
-                            className="w-full h-full text-right bg-amber-50/40 focus:bg-white focus:ring-2 focus:ring-emerald-500 rounded-md px-3 font-bold text-slate-700 outline-none placeholder:text-slate-300" placeholder="0,00" />
+                            className="w-full h-full text-right bg-orange-50/50 focus:bg-white focus:ring-2 focus:ring-emerald-500 rounded-md px-3 font-bold text-slate-700 outline-none placeholder:text-slate-300" placeholder="0,00" />
                         </div>
                       </td>
                       <td className="p-4 text-center text-xs text-slate-400">{formatPercent(item.planned, totalIncomePlanned)}</td>
+                      {/* MESES REAIS */}
                       {visibleMonths.map((month, index) => (
-                        <td key={month} className={`p-4 text-right text-slate-600 text-sm ${index === 0 ? 'bg-slate-50/50 font-semibold' : ''}`}>
+                        <td key={month} className={`p-4 text-right text-slate-600 text-sm ${index === 0 ? 'bg-purple-50/10 font-bold text-purple-700' : ''}`}>
                           {formatMoney(item.realized[month] || 0)}
                         </td>
                       ))}
@@ -286,20 +292,22 @@ export default function PlanningPage() {
                            {category.name}
                         </td>
                         
-                        <td className="p-0 relative bg-amber-50/20">
+                        {/* INPUT PLANEJAMENTO */}
+                        <td className="p-0 relative bg-orange-50/30">
                            <div className="absolute inset-0 m-1">
                              <input type="number" value={category.planned || ''} onChange={(e) => handleMetaChange('expense', category.id, e.target.value)}
-                               className="w-full h-full text-right bg-amber-50/40 focus:bg-white focus:ring-2 focus:ring-rose-500 rounded-md px-3 font-bold text-slate-800 outline-none placeholder:text-slate-300" placeholder="0,00" />
+                               className="w-full h-full text-right bg-orange-50/50 focus:bg-white focus:ring-2 focus:ring-rose-500 rounded-md px-3 font-bold text-slate-800 outline-none placeholder:text-slate-300" placeholder="0,00" />
                            </div>
                         </td>
                         
                         <td className="p-4 text-center text-xs text-slate-500">{formatPercent(catPlanned, totalExpensePlanned)}</td>
                         
+                        {/* MESES REAIS */}
                         {visibleMonths.map((month, index) => {
                           const val = category.realized[month] || 0;
                           const isOverBudget = category.planned > 0 && val > category.planned;
                           return (
-                            <td key={month} className={`p-4 text-right transition-colors ${index === 0 ? 'bg-slate-50/50' : ''} ${isOverBudget ? 'text-rose-600 font-bold' : 'text-slate-600'}`}>
+                            <td key={month} className={`p-4 text-right transition-colors ${index === 0 ? 'bg-purple-50/10 font-medium' : 'text-slate-600'} ${isOverBudget ? 'text-rose-600 font-bold' : ''}`}>
                               {formatMoney(val)}
                             </td>
                           );
@@ -310,8 +318,11 @@ export default function PlanningPage() {
                   
                   {expenses.length === 0 && !loading && (
                     <tr>
-                      <td colSpan={3 + visibleMonths.length} className="p-8 text-center text-slate-400 italic">
-                        Nenhuma despesa registrada. Comece adicionando transações no Dashboard.
+                      <td colSpan={3 + visibleMonths.length} className="p-12 text-center text-slate-400 italic">
+                        <div className="flex flex-col items-center gap-2">
+                           <p>Nenhuma despesa encontrada.</p>
+                           <a href="/" className="text-brand-600 hover:underline text-sm font-bold">Criar transação no Dashboard</a>
+                        </div>
                       </td>
                     </tr>
                   )}
