@@ -7,13 +7,17 @@ export async function GET(request: Request) {
   const code = requestUrl.searchParams.get('code');
 
   if (code) {
-    const cookieStore = cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    // CORREÇÃO PARA NEXT.JS 16: Adicionado o 'await' aqui
+    const cookieStore = await cookies();
     
-    // Troca o código temporário por uma sessão real do usuário
+    const supabase = createRouteHandlerClient({ 
+      cookies: () => cookieStore 
+    });
+    
+    // Troca o código temporário por uma sessão real
     await supabase.auth.exchangeCodeForSession(code);
   }
 
-  // Redireciona para a página principal (Dashboard) após o login
+  // Redireciona para o Dashboard
   return NextResponse.redirect(requestUrl.origin);
 }
