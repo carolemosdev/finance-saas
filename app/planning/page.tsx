@@ -8,8 +8,8 @@ import {
   Menu, X, Eye, EyeOff, ChevronDown, ChevronRight, Settings,
   Repeat, TrendingUp, Plus, Trash2, Loader2, AlertCircle
 } from "lucide-react";
-import { MobileNav } from "../../components/MobileNav"; // Reutilizando seu componente
-import { toast } from "sonner"; // Para avisos bonitos
+import { MobileNav } from "../../components/MobileNav"; 
+import { toast } from "sonner"; 
 
 // --- TIPAGEM ---
 type MonthlyValue = { [month: string]: number };
@@ -36,7 +36,7 @@ const MONTH_LABELS: { [key: string]: string } = {
   'abr': 'Abr', 'mai': 'Mai', 'jun': 'Jun' 
 };
 
-// --- COMPONENTE SIDEBAR (Mantenha o mesmo padrão) ---
+// --- COMPONENTE SIDEBAR ---
 function Sidebar({ userEmail, onLogout }: any) {
   return (
     <aside className="w-72 bg-slate-900 hidden md:flex flex-col shadow-2xl z-10 relative shrink-0">
@@ -84,9 +84,7 @@ export default function PlanningPage() {
         .select('amount, type, date, description, category_id, categories(name)')
         .eq('user_id', user.id);
 
-      // B. Buscar Categorias (Para montar a estrutura)
-      // *Nota: Idealmente, você teria uma tabela de 'metas' separada. 
-      // Aqui vamos simular pegando as categorias existentes e montando a tabela.
+      // B. Buscar Categorias
       const { data: categories } = await supabase
         .from('categories')
         .select('*')
@@ -101,19 +99,19 @@ export default function PlanningPage() {
     loadData();
   }, [router]);
 
-  // --- 2. PROCESSAR DADOS (LIGAR TRANSAÇÕES AO PLANEJAMENTO) ---
+  // --- 2. PROCESSAR DADOS COM FILTRO "LIMPEZA" ---
   const processRealData = (categoriesDb: any[], transactionsDb: any[]) => {
     
-    // Preparar estrutura base das despesas usando as categorias do banco
+    // Preparar estrutura base das despesas usando todas as categorias do banco
     const expensesMap: ExpenseCategory[] = categoriesDb.filter(c => c.type === 'EXPENSE').map(c => ({
       id: c.id,
       name: c.name,
-      planned: 0, // No futuro, isso pode vir de uma tabela 'budgets'
+      planned: 0, 
       realized: { jan: 0, fev: 0, mar: 0, abr: 0, mai: 0, jun: 0 },
-      subcategories: [] // Se seu banco for simples (sem sub), fica vazio
+      subcategories: [] 
     }));
 
-    // Preparar receitas (fixas por enquanto ou baseadas em categoria 'Income')
+    // Preparar receitas
     const incomesList: PlanningItem[] = [
       { id: 'salary', name: "Salário / Receitas", planned: 0, isFixed: true, realized: { jan: 0, fev: 0, mar: 0, abr: 0, mai: 0, jun: 0 } }
     ];
@@ -121,24 +119,31 @@ export default function PlanningPage() {
     // Mapear transações para os meses corretos
     transactionsDb.forEach(t => {
       const date = new Date(t.date);
-      const monthIndex = date.getMonth(); // 0 = Jan
-      const monthKey = MONTHS[monthIndex]; // 'jan', 'fev'...
+      const monthIndex = date.getMonth(); 
+      const monthKey = MONTHS[monthIndex]; 
       
-      if (!monthKey) return; // Ignora meses fora do semestre atual
+      if (!monthKey) return; 
 
       if (t.type === 'EXPENSE') {
         const category = expensesMap.find(c => c.id === t.category_id);
         if (category) {
           category.realized[monthKey] = (category.realized[monthKey] || 0) + t.amount;
-        } else {
-          // Se não achar categoria (ex: apagada), joga numa "Outros" ou cria dinâmica
         }
       } else if (t.type === 'INCOME') {
         incomesList[0].realized[monthKey] += t.amount;
       }
     });
 
-    setExpenses(expensesMap);
+    // --- ATUALIZAÇÃO: FILTRO PARA ESCONDER CATEGORIAS VAZIAS ---
+    // Só mostramos categorias que tenham META (planned > 0) OU algum GASTO (realized > 0)
+    const activeExpenses = expensesMap.filter(cat => {
+        const hasPlanned = cat.planned > 0;
+        // Verifica se existe algum valor maior que zero em qualquer mês
+        const hasRealized = Object.values(cat.realized).some(val => val > 0);
+        return hasPlanned || hasRealized;
+    });
+
+    setExpenses(activeExpenses);
     setIncomes(incomesList);
   };
 
@@ -195,7 +200,7 @@ export default function PlanningPage() {
              <div className="mb-6 p-4 bg-blue-50 border border-blue-100 rounded-xl flex items-center gap-3 text-blue-700">
                 <AlertCircle size={24} />
                 <p className="text-sm">
-                  <strong>Dica:</strong> As categorias aparecem aqui automaticamente quando você as cria. 
+                  <strong>Dica:</strong> As categorias aparecem aqui automaticamente quando você as cria ou quando define uma meta. 
                   Os valores nos meses (Jan, Fev...) são preenchidos sozinhos conforme você lança suas transações no Dashboard!
                 </p>
              </div>
