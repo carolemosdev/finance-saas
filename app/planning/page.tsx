@@ -19,7 +19,7 @@ type PlanningItem = {
   name: string;
   planned: number;     // Meta (Digitável)
   isFixed: boolean;
-  realized: MonthlyValue; // Automático (Vem das transações)
+  realized: MonthlyValue; // Automático
 };
 
 type ExpenseCategory = {
@@ -32,8 +32,8 @@ type ExpenseCategory = {
 
 const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun'];
 const MONTH_LABELS: { [key: string]: string } = { 
-  'jan': 'Jan', 'fev': 'Fev', 'mar': 'Mar', 
-  'abr': 'Abr', 'mai': 'Mai', 'jun': 'Jun' 
+  'jan': 'JAN', 'fev': 'FEV', 'mar': 'MAR', 
+  'abr': 'ABR', 'mai': 'MAI', 'jun': 'JUN' 
 };
 
 // --- COMPONENTE SIDEBAR ---
@@ -70,7 +70,7 @@ export default function PlanningPage() {
   const [expenses, setExpenses] = useState<ExpenseCategory[]>([]);
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
-  // --- 1. CARREGAR DADOS REAIS DO SUPABASE ---
+  // --- 1. CARREGAR DADOS ---
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
@@ -78,76 +78,45 @@ export default function PlanningPage() {
       if (!user) { router.push("/auth"); return; }
       setUserEmail(user.email ?? null);
 
-      // A. Buscar Transações
-      const { data: transactions } = await supabase
-        .from('transactions')
-        .select('amount, type, date, description, category_id, categories(name)')
-        .eq('user_id', user.id);
+      const { data: transactions } = await supabase.from('transactions').select('amount, type, date, category_id').eq('user_id', user.id);
+      const { data: categories } = await supabase.from('categories').select('*').eq('user_id', user.id);
 
-      // B. Buscar Categorias
-      const { data: categories } = await supabase
-        .from('categories')
-        .select('*')
-        .eq('user_id', user.id);
-
-      if (transactions && categories) {
-        processRealData(categories, transactions);
-      }
+      if (transactions && categories) processRealData(categories, transactions);
       setLoading(false);
     };
-
     loadData();
   }, [router]);
 
-  // --- 2. PROCESSAR DADOS COM FILTRO "LIMPEZA" ---
+  // --- 2. PROCESSAR DADOS ---
   const processRealData = (categoriesDb: any[], transactionsDb: any[]) => {
-    
-    // Preparar estrutura base das despesas usando todas as categorias do banco
+    // Cria mapa de despesas
     const expensesMap: ExpenseCategory[] = categoriesDb.filter(c => c.type === 'EXPENSE').map(c => ({
-      id: c.id,
-      name: c.name,
-      planned: 0, 
-      realized: { jan: 0, fev: 0, mar: 0, abr: 0, mai: 0, jun: 0 },
-      subcategories: [] 
+      id: c.id, name: c.name, planned: 0, realized: { jan: 0, fev: 0, mar: 0, abr: 0, mai: 0, jun: 0 }, subcategories: [] 
     }));
+    // Cria receita única (simplificado)
+    const incomesList: PlanningItem[] = [{ id: 'salary', name: "Salário / Receitas", planned: 0, isFixed: true, realized: { jan: 0, fev: 0, mar: 0, abr: 0, mai: 0, jun: 0 } }];
 
-    // Preparar receitas
-    const incomesList: PlanningItem[] = [
-      { id: 'salary', name: "Salário / Receitas", planned: 0, isFixed: true, realized: { jan: 0, fev: 0, mar: 0, abr: 0, mai: 0, jun: 0 } }
-    ];
-
-    // Mapear transações para os meses corretos
+    // Preenche com transações
     transactionsDb.forEach(t => {
       const date = new Date(t.date);
-      const monthIndex = date.getMonth(); 
-      const monthKey = MONTHS[monthIndex]; 
-      
-      if (!monthKey) return; 
+      const monthKey = MONTHS[date.getMonth()];
+      if (!monthKey) return;
 
       if (t.type === 'EXPENSE') {
-        const category = expensesMap.find(c => c.id === t.category_id);
-        if (category) {
-          category.realized[monthKey] = (category.realized[monthKey] || 0) + t.amount;
-        }
+        const cat = expensesMap.find(c => c.id === t.category_id);
+        if (cat) cat.realized[monthKey] = (cat.realized[monthKey] || 0) + t.amount;
       } else if (t.type === 'INCOME') {
         incomesList[0].realized[monthKey] += t.amount;
       }
     });
 
-    // --- ATUALIZAÇÃO: FILTRO PARA ESCONDER CATEGORIAS VAZIAS ---
-    // Só mostramos categorias que tenham META (planned > 0) OU algum GASTO (realized > 0)
-    const activeExpenses = expensesMap.filter(cat => {
-        const hasPlanned = cat.planned > 0;
-        // Verifica se existe algum valor maior que zero em qualquer mês
-        const hasRealized = Object.values(cat.realized).some(val => val > 0);
-        return hasPlanned || hasRealized;
-    });
-
+    // Filtro: Esconde vazios
+    const activeExpenses = expensesMap.filter(cat => cat.planned > 0 || Object.values(cat.realized).some(v => v > 0));
     setExpenses(activeExpenses);
     setIncomes(incomesList);
   };
 
-  // --- CÁLCULOS DINÂMICOS (Somas) ---
+  // --- CÁLCULOS ---
   const calculateCategoryTotal = (cat: ExpenseCategory, type: 'planned' | string) => {
     if (type === 'planned') return cat.planned;
     return cat.realized[type] || 0;
@@ -160,16 +129,13 @@ export default function PlanningPage() {
   const totalExpensePlanned = expenses.reduce((acc, cat) => acc + calculateCategoryTotal(cat, 'planned'), 0);
 
   const getMonthlyBalance = (month: string) => getTotalIncome(month) - getTotalExpense(month);
-  const balancePlanned = totalIncomePlanned - totalExpensePlanned;
+  const balancePlanned = totalIncomePlanned - totalExpensePlanned; // Saldo da Meta
 
-  // --- INTERAÇÕES DO USUÁRIO ---
+  // --- HANDLERS ---
   const handleMetaChange = (type: 'income' | 'expense', id: string | number, val: string) => {
     const value = parseFloat(val) || 0;
-    if (type === 'income') {
-      setIncomes(prev => prev.map(i => i.id === id ? { ...i, planned: value } : i));
-    } else {
-      setExpenses(prev => prev.map(c => c.id === id ? { ...c, planned: value } : c));
-    }
+    if (type === 'income') setIncomes(prev => prev.map(i => i.id === id ? { ...i, planned: value } : i));
+    else setExpenses(prev => prev.map(c => c.id === id ? { ...c, planned: value } : c));
   };
 
   const formatMoney = (val: number) => !areValuesVisible ? "••••••" : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -185,7 +151,7 @@ export default function PlanningPage() {
       <main className="flex-1 overflow-y-auto relative z-0">
         <header className="bg-white/80 backdrop-blur-md sticky top-0 z-20 border-b border-slate-200 px-8 py-5 flex justify-between items-center">
           <h2 className="text-2xl font-extrabold text-slate-800 flex items-center gap-3">
-            Planejamento Dinâmico
+            Planejamento e Controle
             <button onClick={() => setAreValuesVisible(!areValuesVisible)} className="ml-2 p-2 rounded-full hover:bg-slate-100 text-slate-400">
               {areValuesVisible ? <Eye size={20} /> : <EyeOff size={20} />}
             </button>
@@ -194,48 +160,48 @@ export default function PlanningPage() {
         </header>
 
         <div className="p-4 md:p-8 max-w-full mx-auto">
-          
-          {/* AVISO DE INTEGRAÇÃO */}
-          {!loading && expenses.length === 0 && (
-             <div className="mb-6 p-4 bg-blue-50 border border-blue-100 rounded-xl flex items-center gap-3 text-blue-700">
-                <AlertCircle size={24} />
-                <p className="text-sm">
-                  <strong>Dica:</strong> As categorias aparecem aqui automaticamente quando você as cria ou quando define uma meta. 
-                  Os valores nos meses (Jan, Fev...) são preenchidos sozinhos conforme você lança suas transações no Dashboard!
-                </p>
-             </div>
-          )}
-
           <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/60 border-0 overflow-hidden">
             <div className="overflow-x-auto pb-4">
               <table className="w-full text-left border-collapse min-w-[1200px]">
+                
+                {/* --- HEADER FIXO DA TABELA --- */}
                 <thead>
+                  {/* LINHA 1: SALDO MENSAL (FORA DA LISTA DE CATEGORIAS) */}
+                  <tr className="bg-slate-50">
+                    <th className="p-4 pl-6 text-sm font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 bg-slate-50 sticky left-0 z-20">
+                      Saldo Mensal
+                    </th>
+                    {/* Espaço vazio para alinhar com Meta e % */}
+                    <th className="border-b border-slate-200 bg-slate-50"></th> 
+                    <th className="border-b border-slate-200 bg-slate-50"></th>
+
+                    {/* Colunas de Saldo dos Meses */}
+                    {MONTHS.map(month => {
+                      const bal = getMonthlyBalance(month);
+                      return (
+                        <th key={month} className="p-4 text-right border-b border-slate-200 min-w-[120px]">
+                           <span className={`text-lg font-extrabold px-3 py-1 rounded-lg ${bal >= 0 ? 'text-emerald-700 bg-emerald-50' : 'text-rose-700 bg-rose-50'}`}>
+                             {formatMoney(bal)}
+                           </span>
+                        </th>
+                      );
+                    })}
+                  </tr>
+
+                  {/* LINHA 2: TÍTULOS DAS COLUNAS */}
                   <tr className="bg-slate-100 text-slate-600 text-xs uppercase tracking-wider font-bold">
-                    <th className="p-4 pl-6 sticky left-0 bg-slate-100 z-10 border-b border-slate-200 min-w-[250px]">Categorias</th>
-                    <th className="p-4 text-right bg-amber-50 text-amber-800 border-x border-amber-100 min-w-[140px] border-b border-slate-200">Meta (R$)</th>
+                    <th className="p-4 pl-6 sticky left-0 bg-slate-100 z-10 border-b border-slate-200 min-w-[280px]">Categorias e Subcategorias</th>
+                    <th className="p-4 text-right bg-amber-50 text-amber-800 border-x border-amber-100 min-w-[140px] border-b border-slate-200">Planejamento</th>
                     <th className="p-4 text-center min-w-[60px] border-b border-slate-200">%</th>
                     {MONTHS.map(month => (
                       <th key={month} className="p-4 text-right min-w-[120px] whitespace-nowrap border-b border-slate-200">{MONTH_LABELS[month]}</th>
                     ))}
                   </tr>
-                  
-                  {/* SALDO MENSAL */}
-                  <tr className="bg-slate-50 font-extrabold text-slate-800 border-b-2 border-slate-200">
-                    <td className="p-4 pl-6 sticky left-0 bg-slate-50 z-10 text-slate-500 uppercase text-xs tracking-wider">Saldo Realizado</td>
-                    <td className={`p-4 text-right ${balancePlanned >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                      {formatMoney(balancePlanned)}
-                    </td>
-                    <td className="p-4 text-center text-slate-400">-</td>
-                    {MONTHS.map(month => {
-                      const bal = getMonthlyBalance(month);
-                      return <td key={month} className={`p-4 text-right ${bal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatMoney(bal)}</td>;
-                    })}
-                  </tr>
                 </thead>
 
                 <tbody className="divide-y divide-slate-50">
                   
-                  {/* === RECEITAS === */}
+                  {/* === RECEITAS (Bloco Verde) === */}
                   <tr className="bg-emerald-600 text-white font-bold text-sm">
                     <td className="p-4 pl-6 sticky left-0 bg-emerald-600 z-10">Receitas Totais</td>
                     <td className="p-4 text-right bg-emerald-700/50">{formatMoney(totalIncomePlanned)}</td>
@@ -248,20 +214,20 @@ export default function PlanningPage() {
                       <td className="p-4 pl-10 sticky left-0 bg-white group-hover:bg-slate-50 z-10 border-r border-slate-100">
                         {item.name}
                       </td>
-                      <td className="p-0 relative">
+                      <td className="p-0 relative bg-amber-50/10">
                         <div className="absolute inset-0 m-1">
                           <input type="number" value={item.planned || ''} onChange={(e) => handleMetaChange('income', item.id, e.target.value)}
-                            className="w-full h-full text-right bg-amber-50/30 focus:bg-white focus:ring-2 focus:ring-brand-500 rounded-md px-3 font-bold text-slate-700 outline-none" placeholder="Definir Meta" />
+                            className="w-full h-full text-right bg-amber-50/30 focus:bg-white focus:ring-2 focus:ring-emerald-500 rounded-md px-3 font-bold text-slate-700 outline-none placeholder:text-slate-300" placeholder="0,00" />
                         </div>
                       </td>
                       <td className="p-4 text-center text-xs text-slate-400">{formatPercent(item.planned, totalIncomePlanned)}</td>
-                      {MONTHS.map(month => <td key={month} className="p-4 text-right text-slate-500 text-sm">{formatMoney(item.realized[month] || 0)}</td>)}
+                      {MONTHS.map(month => <td key={month} className="p-4 text-right text-slate-600 text-sm">{formatMoney(item.realized[month] || 0)}</td>)}
                     </tr>
                   ))}
 
-                  <tr><td colSpan={3 + MONTHS.length} className="h-4 bg-slate-50"></td></tr>
+                  <tr><td colSpan={3 + MONTHS.length} className="h-6 bg-slate-50 border-y border-slate-100"></td></tr>
 
-                  {/* === DESPESAS === */}
+                  {/* === DESPESAS (Bloco Vermelho/Laranja) === */}
                   <tr className="bg-rose-600 text-white font-bold text-sm">
                     <td className="p-4 pl-6 sticky left-0 bg-rose-600 z-10">Despesas Totais</td>
                     <td className="p-4 text-right bg-rose-700/50">{formatMoney(totalExpensePlanned)}</td>
@@ -270,26 +236,36 @@ export default function PlanningPage() {
                   </tr>
 
                   {expenses.map(category => {
+                    const catPlanned = calculateCategoryTotal(category, 'planned');
                     return (
                       <tr key={category.id} className="bg-white hover:bg-slate-50 group border-b border-slate-50">
-                        <td className="p-4 pl-6 sticky left-0 bg-white group-hover:bg-slate-50 z-10 border-r border-slate-100 font-bold text-slate-700">
+                        {/* Coluna Nome */}
+                        <td className="p-4 pl-6 sticky left-0 bg-white group-hover:bg-slate-50 z-10 border-r border-slate-100 font-bold text-slate-700 flex items-center gap-2">
+                           {category.subcategories.length > 0 && (
+                             <button onClick={() => toggleCategory(category.id as string)} className="text-slate-400 hover:text-brand-600">
+                               {expandedCategories.includes(category.id as string) ? <ChevronDown size={16}/> : <ChevronRight size={16}/>}
+                             </button>
+                           )}
                            {category.name}
                         </td>
-                        {/* COLUNA META (EDITÁVEL) */}
-                        <td className="p-0 relative">
+                        
+                        {/* Coluna Meta (Editável) */}
+                        <td className="p-0 relative bg-amber-50/10">
                            <div className="absolute inset-0 m-1">
                              <input type="number" value={category.planned || ''} onChange={(e) => handleMetaChange('expense', category.id, e.target.value)}
-                               className="w-full h-full text-right bg-amber-50/50 focus:bg-white focus:ring-2 focus:ring-brand-500 rounded-md px-3 font-bold text-slate-800 outline-none" placeholder="0,00" />
+                               className="w-full h-full text-right bg-amber-50/50 focus:bg-white focus:ring-2 focus:ring-rose-500 rounded-md px-3 font-bold text-slate-800 outline-none placeholder:text-slate-300" placeholder="0,00" />
                            </div>
                         </td>
-                        <td className="p-4 text-center text-xs text-slate-500">{formatPercent(category.planned, totalExpensePlanned)}</td>
                         
-                        {/* COLUNAS DOS MESES (AUTOMÁTICAS) */}
+                        {/* Coluna % */}
+                        <td className="p-4 text-center text-xs text-slate-500">{formatPercent(catPlanned, totalExpensePlanned)}</td>
+                        
+                        {/* Colunas Meses */}
                         {MONTHS.map(month => {
                           const val = category.realized[month] || 0;
                           const isOverBudget = category.planned > 0 && val > category.planned;
                           return (
-                            <td key={month} className={`p-4 text-right transition-colors ${isOverBudget ? 'text-red-600 font-extrabold bg-red-50/30' : 'text-slate-600'}`}>
+                            <td key={month} className={`p-4 text-right transition-colors ${isOverBudget ? 'text-rose-600 font-bold bg-rose-50/30' : 'text-slate-600'}`}>
                               {formatMoney(val)}
                             </td>
                           );
@@ -300,12 +276,11 @@ export default function PlanningPage() {
                   
                   {expenses.length === 0 && !loading && (
                     <tr>
-                      <td colSpan={3 + MONTHS.length} className="p-8 text-center text-slate-400">
-                        Nenhuma categoria encontrada. Crie uma transação no Dashboard para começar!
+                      <td colSpan={3 + MONTHS.length} className="p-8 text-center text-slate-400 italic">
+                        Nenhuma despesa registrada ainda.
                       </td>
                     </tr>
                   )}
-
                 </tbody>
               </table>
             </div>
