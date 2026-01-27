@@ -1,266 +1,349 @@
 "use client";
-export const dynamic = 'force-dynamic';
 
-import { useState, useEffect } from "react";
-import { supabase } from "../../lib/supabase";
-import { 
-  ArrowLeft, Upload, Save, ChevronLeft, ChevronRight, 
-  AlertCircle, CheckCircle2, FileSpreadsheet, FileText 
-} from "lucide-react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { supabase } from "../../lib/supabase"; // Certifique-se que este caminho está correto
+import { 
+  Wallet, 
+  TrendingUp, 
+  TrendingDown, 
+  Briefcase, 
+  Target,
+  CreditCard,
+  ArrowRight,
+  LogOut,
+  Menu,
+  X,
+  Eye,
+  EyeOff,
+  ChevronDown,
+  ChevronRight
+} from "lucide-react";
 
-export default function PlanningPage() {
-  const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [date, setDate] = useState(new Date());
-  
-  // Dados combinados (Categoria + Meta + Gasto Real)
-  const [budgetItems, setBudgetItems] = useState<any[]>([]);
-  
-  // Estado para o Modal de Importação
-  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+// --- COMPONENTES DE LAYOUT (Sidebar, MobileNav) ---
+// Você pode extrair estes componentes para arquivos separados depois se quiser.
+// Por enquanto, para facilitar, vou mantê-los aqui no mesmo arquivo.
 
-  const formatMoney = (val: number) => 
-    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
-
-  // 1. Carrega categorias, orçamentos e gastos reais
-  const loadData = async () => {
-    setLoading(true);
-    const user = (await supabase.auth.getUser()).data.user;
-    if (!user) return;
-
-    const currentMonth = date.getMonth() + 1; // 1-12
-    const currentYear = date.getFullYear();
-
-    // A. Busca todas as categorias de despesa
-    const { data: categories } = await supabase
-      .from('categories')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('type', 'EXPENSE');
-
-    if (!categories) return;
-
-    // B. Busca o orçamento definido para este mês
-    const { data: budgets } = await supabase
-      .from('budgets')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('month', currentMonth)
-      .eq('year', currentYear);
-
-    // C. Busca os gastos REAIS deste mês (agrupados manualmente no frontend por simplicidade)
-    const startOfMonth = new Date(currentYear, currentMonth - 1, 1).toISOString();
-    const endOfMonth = new Date(currentYear, currentMonth, 0, 23, 59, 59).toISOString();
-
-    const { data: transactions } = await supabase
-      .from('transactions')
-      .select('amount, category_id')
-      .eq('user_id', user.id)
-      .eq('type', 'EXPENSE')
-      .gte('date', startOfMonth)
-      .lte('date', endOfMonth);
-
-    // D. Combina tudo
-    const combined = categories.map(cat => {
-      const budget = budgets?.find(b => b.category_id === cat.id);
-      const realized = transactions
-        ?.filter(t => t.category_id === cat.id)
-        .reduce((sum, t) => sum + t.amount, 0) || 0;
-
-      return {
-        category_id: cat.id,
-        category_name: cat.name,
-        category_color: cat.color || '#64748b',
-        planned: budget?.amount || 0,
-        realized: realized,
-        budget_id: budget?.id // Se existir
-      };
-    });
-
-    setBudgetItems(combined);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    loadData();
-  }, [date]);
-
-  // 2. Salvar o Orçamento (Upsert: Cria ou Atualiza)
-  const handleUpdateBudget = async (categoryId: string, newValue: string) => {
-    const amount = parseFloat(newValue) || 0;
-    const user = (await supabase.auth.getUser()).data.user;
-    if (!user) return;
-
-    const { error } = await supabase.from('budgets').upsert({
-      user_id: user.id,
-      category_id: categoryId,
-      month: date.getMonth() + 1,
-      year: date.getFullYear(),
-      amount: amount
-    }, { onConflict: 'user_id, category_id, month, year' });
-
-    if (error) {
-      toast.error("Erro ao salvar meta");
-    } else {
-      // Atualiza estado local sem recarregar tudo
-      setBudgetItems(prev => prev.map(item => 
-        item.category_id === categoryId ? { ...item, planned: amount } : item
-      ));
-    }
-  };
-
-  // Navegação de Mês
-  const changeMonth = (offset: number) => {
-    const newDate = new Date(date);
-    newDate.setMonth(date.getMonth() + offset);
-    setDate(newDate);
-  };
+function MobileNav({ userEmail, onLogout }: { userEmail: string | null, onLogout: () => void }) {
+  const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans">
-      
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
-        <div className="flex items-center gap-4">
-          <button onClick={() => router.back()} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
-            <ArrowLeft className="text-slate-600" />
-          </button>
-          <div>
-            <h1 className="text-2xl font-extrabold text-slate-800">Planejamento & Controle</h1>
-            <p className="text-slate-500 text-sm">Defina metas e acompanhe seus gastos.</p>
-          </div>
+    <div className="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center shadow-lg sticky top-0 z-50">
+      <div className="flex items-center gap-2">
+        <div className="bg-brand-600 p-1.5 rounded-lg">
+           <Wallet className="text-white w-5 h-5" />
         </div>
-
-        <div className="flex items-center gap-3 bg-white p-1.5 rounded-xl shadow-sm border border-slate-200">
-          <button onClick={() => changeMonth(-1)} className="p-2 hover:bg-slate-100 rounded-lg"><ChevronLeft size={20}/></button>
-          <span className="font-bold text-slate-700 w-32 text-center capitalize">
-            {date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-          </span>
-          <button onClick={() => changeMonth(1)} className="p-2 hover:bg-slate-100 rounded-lg"><ChevronRight size={20}/></button>
-        </div>
-
-        <button 
-          onClick={() => setIsImportModalOpen(true)}
-          className="flex items-center gap-2 bg-white border border-slate-300 text-slate-700 px-4 py-2.5 rounded-xl font-bold hover:bg-slate-50 hover:border-brand-500 hover:text-brand-600 transition-all shadow-sm"
-        >
-          <Upload size={18} />
-          <span className="hidden md:inline">Importar Extrato</span>
-        </button>
+        <span className="font-bold text-lg tracking-tight">Flui</span>
       </div>
 
-      {/* Grid de Planejamento */}
-      <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/60 border border-slate-100 overflow-hidden">
-        <div className="grid grid-cols-12 gap-4 p-5 bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500 uppercase tracking-wider">
-          <div className="col-span-4 md:col-span-3">Categoria</div>
-          <div className="col-span-4 md:col-span-2 text-right">Meta (R$)</div>
-          <div className="col-span-4 md:col-span-2 text-right">Gasto (R$)</div>
-          <div className="hidden md:block md:col-span-5 pl-4">Progresso</div>
-        </div>
+      <button onClick={() => setIsOpen(!isOpen)} className="p-2 hover:bg-slate-800 rounded-lg transition-colors">
+        {isOpen ? <X size={24} /> : <Menu size={24} />}
+      </button>
 
-        <div className="divide-y divide-slate-100">
-          {budgetItems.map((item) => {
-            const percentage = item.planned > 0 ? (item.realized / item.planned) * 100 : 0;
-            const isOverBudget = percentage > 100;
+      {/* Menu Dropdown */}
+      {isOpen && (
+        <div className="absolute top-full left-0 right-0 bg-slate-900 border-t border-slate-800 shadow-2xl animate-in slide-in-from-top-2">
+          <div className="p-4 space-y-4">
             
-            return (
-              <div key={item.category_id} className="grid grid-cols-12 gap-4 p-5 items-center hover:bg-slate-50/50 transition-colors group">
-                
-                {/* 1. Nome da Categoria */}
-                <div className="col-span-4 md:col-span-3 flex items-center gap-3">
-                  <div className="w-3 h-10 rounded-full" style={{ backgroundColor: item.category_color }}></div>
-                  <span className="font-bold text-slate-700 text-sm md:text-base">{item.category_name}</span>
-                </div>
+            <div className="px-4 py-3 bg-slate-800/50 rounded-xl border border-slate-700">
+               <p className="text-xs text-slate-400 uppercase font-bold mb-1">Logado como</p>
+               <p className="text-sm font-medium truncate text-white">{userEmail}</p>
+            </div>
 
-                {/* 2. Input da Meta (Editável) */}
-                <div className="col-span-4 md:col-span-2">
-                  <input 
-                    type="number" 
-                    defaultValue={item.planned}
-                    onBlur={(e) => handleUpdateBudget(item.category_id, e.target.value)}
-                    className="w-full text-right bg-slate-100 border-transparent focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 rounded-lg py-2 px-3 text-sm font-bold text-slate-700 transition-all"
-                    placeholder="0,00"
-                  />
-                </div>
+            <nav className="flex flex-col gap-2">
+               <a href="/" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-all">
+                 <Briefcase size={18} /> Visão Geral
+               </a>
+               <a href="/planning" className="flex items-center gap-3 px-4 py-3 rounded-xl bg-brand-600 text-white font-medium transition-all">
+                 <Target size={18} /> Planejamento
+               </a>
+            </nav>
 
-                {/* 3. Realizado (Apenas Leitura) */}
-                <div className="col-span-4 md:col-span-2 text-right">
-                  <span className={`font-bold text-sm ${isOverBudget ? 'text-red-600' : 'text-slate-600'}`}>
-                    {formatMoney(item.realized)}
-                  </span>
-                </div>
+            <div className="h-px bg-slate-800 my-2"></div>
 
-                {/* 4. Barra de Progresso Visual */}
-                <div className="col-span-12 md:col-span-5 pl-4 pt-2 md:pt-0">
-                  <div className="flex justify-between text-xs font-bold text-slate-400 mb-1">
-                    <span>{percentage.toFixed(0)}%</span>
-                    {isOverBudget && <span className="text-red-500 flex items-center gap-1"><AlertCircle size={12}/> Estourou</span>}
-                  </div>
-                  <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden relative">
-                    <div 
-                      className={`h-full rounded-full transition-all duration-700 ${
-                        isOverBudget ? 'bg-red-500' : percentage > 80 ? 'bg-amber-400' : 'bg-emerald-500'
-                      }`}
-                      style={{ width: `${Math.min(percentage, 100)}%` }}
-                    ></div>
-                    {/* Linha pontilhada no 100% se estourou */}
-                    {isOverBudget && (
-                       <div className="absolute top-0 bottom-0 right-0 w-0.5 bg-red-600 z-10"></div>
-                    )}
-                  </div>
-                </div>
-
-              </div>
-            );
-          })}
-
-          {budgetItems.length === 0 && !loading && (
-             <div className="p-10 text-center text-slate-400">
-                Nenhuma categoria de despesa encontrada. Cadastre categorias primeiro.
-             </div>
-          )}
-        </div>
-      </div>
-
-      {/* --- MODAL DE IMPORTAÇÃO (VISUAL) --- */}
-      {isImportModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl p-6 animate-in zoom-in-95">
-             <div className="flex justify-between items-center mb-6">
-               <h2 className="text-xl font-bold text-slate-800">Importar Lançamentos</h2>
-               <button onClick={() => setIsImportModalOpen(false)} className="p-1 hover:bg-slate-100 rounded-full"><AlertCircle className="rotate-45" /></button>
-             </div>
-             
-             <div className="space-y-4">
-               <div className="border-2 border-dashed border-slate-300 rounded-2xl p-8 flex flex-col items-center justify-center text-center hover:bg-slate-50 transition-colors cursor-pointer group">
-                  <div className="bg-brand-50 p-4 rounded-full mb-3 group-hover:scale-110 transition-transform">
-                    <Upload className="w-8 h-8 text-brand-600" />
-                  </div>
-                  <p className="font-bold text-slate-700">Clique para escolher o arquivo</p>
-                  <p className="text-sm text-slate-400 mt-1">Suportamos OFX, PDF (Nubank/Inter) ou Excel</p>
-               </div>
-
-               <div className="grid grid-cols-3 gap-3">
-                 <button className="flex flex-col items-center gap-2 p-3 border border-slate-200 rounded-xl hover:border-brand-500 hover:bg-brand-50 transition-all">
-                    <FileText className="text-slate-500" /> <span className="text-xs font-bold text-slate-600">OFX Bancário</span>
-                 </button>
-                 <button className="flex flex-col items-center gap-2 p-3 border border-slate-200 rounded-xl hover:border-brand-500 hover:bg-brand-50 transition-all">
-                    <FileSpreadsheet className="text-emerald-600" /> <span className="text-xs font-bold text-slate-600">Excel / CSV</span>
-                 </button>
-                 <button className="flex flex-col items-center gap-2 p-3 border border-slate-200 rounded-xl hover:border-brand-500 hover:bg-brand-50 transition-all">
-                    <FileText className="text-red-500" /> <span className="text-xs font-bold text-slate-600">PDF Fatura</span>
-                 </button>
-               </div>
-             </div>
-
-             <div className="mt-6 flex justify-end">
-               <button onClick={() => setIsImportModalOpen(false)} className="text-slate-500 font-bold px-4 py-2 hover:bg-slate-100 rounded-lg">Cancelar</button>
-             </div>
+            <button 
+              onClick={onLogout}
+              className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-xl transition-all font-medium"
+            >
+              <LogOut size={18} /> Sair do Sistema
+            </button>
           </div>
         </div>
       )}
+    </div>
+  );
+}
 
+function Sidebar({ userEmail, onLogout }: { userEmail: string | null, onLogout: () => void }) {
+  return (
+    <aside className="w-72 bg-slate-900 hidden md:flex flex-col shadow-2xl z-10 relative shrink-0">
+      <div className="p-8">
+        <h1 className="text-3xl font-extrabold text-white flex items-center gap-3 tracking-tight">
+          <div className="bg-brand-600 p-2 rounded-lg shadow-lg shadow-brand-600/50">
+            <Wallet className="w-7 h-7 text-white" /> 
+          </div>
+          Flui
+        </h1>
+      </div>
+      <nav className="flex-1 px-6 space-y-3 overflow-y-auto py-4 custom-scrollbar">
+        <p className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Principal</p>
+        <a href="/" className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group text-slate-400 hover:bg-slate-800 hover:text-white">
+          <Wallet size={20} /> Dashboard
+        </a>
+        <a href="/incomes" className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group text-slate-400 hover:bg-slate-800 hover:text-white">
+          <TrendingUp size={20} /> Receitas
+        </a>
+        <a href="/expenses" className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group text-slate-400 hover:bg-slate-800 hover:text-white">
+          <TrendingDown size={20} /> Despesas
+        </a>
+        
+        <p className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mt-8 mb-2">Gestão</p>
+        <a href="/investments" className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group text-slate-400 hover:bg-slate-800 hover:text-white">
+            <Briefcase size={20} /> Investimentos
+        </a>
+        <a href="/planning" className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group bg-brand-600 text-white shadow-md shadow-brand-600/30">
+          <Target size={20} /> Planejamento
+        </a>
+        <a href="/credit-cards" className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group text-slate-400 hover:bg-slate-800 hover:text-white">
+            <CreditCard size={20} /> Cartões
+        </a>
+      </nav>
+      
+      <div className="p-6 bg-slate-950/50 m-4 rounded-2xl border border-slate-800 flex flex-col items-center text-center">
+        <div className="w-12 h-12 bg-brand-900 rounded-full flex items-center justify-center text-brand-300 font-bold text-lg mb-3 shadow-md shadow-brand-900/50">
+            {userEmail?.charAt(0).toUpperCase()}
+        </div>
+        <div className="w-full overflow-hidden mb-4">
+            <p className="text-sm text-white font-medium truncate w-full" title={userEmail || ''}>{userEmail}</p>
+            <p className="text-xs text-slate-500 mt-0.5">Conta Gratuita</p>
+        </div>
+        <button onClick={onLogout} className="flex items-center justify-center gap-2 px-4 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition-all w-full border border-slate-700 hover:border-slate-600 active:scale-95">
+            <ArrowRight size={16} /> <span>Sair da conta</span>
+        </button>
+      </div>
+    </aside>
+  );
+}
+
+// --- DADOS MOCKADOS PARA A TABELA (Visualização) ---
+const mockData = {
+  incomes: {
+    totalPlanned: 14790.00,
+    totalRealizedJan: 11290.00,
+    items: [
+      { id: 1, name: "Renda extra", planned: 6000.00, realizedJan: 2500.00 },
+      { id: 2, name: "Salário", planned: 8790.00, realizedJan: 8790.00 },
+    ]
+  },
+  expenses: {
+    totalPlanned: 9471.45,
+    totalRealizedJan: 8914.00,
+    categories: [
+      {
+        id: 'cat1',
+        name: "Cuidado Pessoal",
+        planned: 300.00,
+        realizedJan: 267.55,
+        subcategories: []
+      },
+      {
+        id: 'cat2',
+        name: "Gastos Extras",
+        planned: 695.00,
+        realizedJan: 664.00,
+        subcategories: [
+          { id: 'sub1', name: "Compras variadas", planned: 400.00, realizedJan: 389.00 },
+          { id: 'sub2', name: "Restaurante", planned: 270.00, realizedJan: 250.00 },
+          { id: 'sub3', name: "Streaming", planned: 25.00, realizedJan: 25.00 },
+        ]
+      },
+      {
+        id: 'cat3',
+        name: "Moradia",
+        planned: 3306.00,
+        realizedJan: 3116.00,
+        subcategories: [
+          { id: 'sub4', name: "Aluguel", planned: 2500.00, realizedJan: 2500.00 },
+          { id: 'sub5', name: "Internet", planned: 600.00, realizedJan: 450.00 },
+          { id: 'sub6', name: "Energia", planned: 150.00, realizedJan: 110.00 },
+        ]
+      }
+    ]
+  }
+};
+
+
+// --- PÁGINA PRINCIPAL DO PLANEJAMENTO ---
+export default function PlanningPage() {
+  const router = useRouter();
+  const [areValuesVisible, setAreValuesVisible] = useState(true);
+  // Estado para controlar quais categorias estão expandidas
+  const [expandedCategories, setExpandedCategories] = useState<string[]>(['cat2', 'cat3']);
+
+  // Em um cenário real, você pegaria o usuário do contexto ou de uma chamada à API
+  const userEmail = "usuario@exemplo.com"; 
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push("/auth");
+  };
+
+  const formatMoney = (value: number) => {
+    if (!areValuesVisible) return "••••••";
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  };
+
+  const formatPercentage = (planned: number, total: number) => {
+    if (total === 0) return "0,00%";
+    return `${((planned / total) * 100).toFixed(2)}%`;
+  };
+
+  const toggleCategory = (categoryId: string) => {
+    setExpandedCategories(prev => 
+      prev.includes(categoryId) 
+        ? prev.filter(id => id !== categoryId) 
+        : [...prev, categoryId]
+    );
+  };
+
+  const saldoMensal = mockData.incomes.totalRealizedJan - mockData.expenses.totalRealizedJan;
+
+  return (
+    <div className="flex h-screen bg-slate-50 text-slate-900 font-sans flex-col md:flex-row">
+      
+      <MobileNav userEmail={userEmail} onLogout={handleLogout} />
+      <Sidebar userEmail={userEmail} onLogout={handleLogout} />
+
+      <main className="flex-1 overflow-y-auto relative z-0">
+        {/* Header da Página */}
+        <header className="bg-white/80 backdrop-blur-md sticky top-0 z-20 border-b border-slate-200 px-8 py-5 flex justify-between items-center">
+          <div>
+            <h2 className="text-2xl font-extrabold text-slate-800 flex items-center gap-3">
+              Planejamento e Controle
+              <button 
+                onClick={() => setAreValuesVisible(!areValuesVisible)}
+                className="ml-2 p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-colors"
+                title={areValuesVisible ? "Ocultar valores" : "Mostrar valores"}
+              >
+                {areValuesVisible ? <Eye size={20} /> : <EyeOff size={20} />}
+              </button>
+            </h2>
+          </div>
+          
+          {/* Card de Saldo Mensal */}
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex items-center gap-4">
+            <div>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Saldo Mensal (Jan)</p>
+              <p className={`text-xl font-extrabold ${saldoMensal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                {formatMoney(saldoMensal)}
+              </p>
+            </div>
+          </div>
+        </header>
+
+        <div className="p-4 md:p-8 max-w-7xl mx-auto">
+          
+          <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/60 border-0 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[800px]">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-600 text-sm uppercase tracking-wider font-bold">
+                    <th className="p-4 pl-6 text-left">Categorias e Subcategorias</th>
+                    <th className="p-4 text-right bg-amber-50 border-l border-r border-amber-100 text-amber-700">Planejamento</th>
+                    <th className="p-4 text-center">%</th>
+                    <th className="p-4 text-right">Jan 2025</th>
+                    {/* Adicione mais colunas para outros meses aqui */}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  
+                  {/* --- SEÇÃO DE RECEITAS --- */}
+                  <tr className="bg-emerald-600 text-white font-bold">
+                    <td className="p-4 pl-6">Receitas</td>
+                    <td className="p-4 text-right bg-emerald-700/50">{formatMoney(mockData.incomes.totalPlanned)}</td>
+                    <td className="p-4 text-center">100.00%</td>
+                    <td className="p-4 text-right">{formatMoney(mockData.incomes.totalRealizedJan)}</td>
+                  </tr>
+                  {mockData.incomes.items.map(item => (
+                    <tr key={item.id} className="hover:bg-slate-50 transition-colors font-medium text-slate-700">
+                      <td className="p-4 pl-10 flex items-center gap-2">
+                        {item.name}
+                      </td>
+                      <td className="p-0">
+                        <input 
+                          type="text" 
+                          value={areValuesVisible ? item.planned.toFixed(2) : "••••••"} 
+                          readOnly 
+                          className="w-full h-full p-4 text-right bg-amber-50/50 focus:bg-white focus:ring-2 focus:ring-brand-500 border-0 text-slate-700 font-medium outline-none"
+                        />
+                      </td>
+                      <td className="p-4 text-center text-slate-500 text-sm">{formatPercentage(item.planned, mockData.incomes.totalPlanned)}</td>
+                      <td className="p-4 text-right">{formatMoney(item.realizedJan)}</td>
+                    </tr>
+                  ))}
+
+                  {/* Separador */}
+                  <tr><td colSpan={5} className="h-4 bg-slate-50"></td></tr>
+
+                  {/* --- SEÇÃO DE DESPESAS --- */}
+                  <tr className="bg-rose-600 text-white font-bold">
+                    <td className="p-4 pl-6">Despesas Mensais</td>
+                    <td className="p-4 text-right bg-rose-700/50">{formatMoney(mockData.expenses.totalPlanned)}</td>
+                    <td className="p-4 text-center text-sm">
+                      {formatPercentage(mockData.expenses.totalPlanned, mockData.incomes.totalPlanned)} da Receita
+                    </td>
+                    <td className="p-4 text-right">{formatMoney(mockData.expenses.totalRealizedJan)}</td>
+                  </tr>
+
+                  {mockData.expenses.categories.map(category => (
+                    <>
+                      {/* Linha da Categoria Principal */}
+                      <tr key={category.id} className="hover:bg-slate-50 transition-colors font-bold text-slate-700 bg-slate-50/50">
+                        <td className="p-4 pl-6 flex items-center gap-2 cursor-pointer select-none" onClick={() => toggleCategory(category.id)}>
+                          {category.subcategories.length > 0 ? (
+                            expandedCategories.includes(category.id) ? <ChevronDown size={16} /> : <ChevronRight size={16} />
+                          ) : <span className="w-4"></span>}
+                          {category.name}
+                        </td>
+                        <td className="p-0">
+                          <input 
+                            type="text" 
+                            value={areValuesVisible ? category.planned.toFixed(2) : "••••••"} 
+                            readOnly 
+                            className="w-full h-full p-4 text-right bg-amber-50/50 focus:bg-white focus:ring-2 focus:ring-brand-500 border-0 text-slate-700 font-bold outline-none"
+                          />
+                        </td>
+                        <td className="p-4 text-center text-slate-500 text-sm">{formatPercentage(category.planned, mockData.expenses.totalPlanned)}</td>
+                        <td className="p-4 text-right">{formatMoney(category.realizedJan)}</td>
+                      </tr>
+
+                      {/* Linhas das Subcategorias (se a categoria estiver expandida) */}
+                      {expandedCategories.includes(category.id) && category.subcategories.map(sub => (
+                        <tr key={sub.id} className="hover:bg-slate-50 transition-colors font-medium text-slate-600">
+                          <td className="p-4 pl-12 flex items-center gap-2">
+                            {sub.name}
+                          </td>
+                          <td className="p-0">
+                            <input 
+                              type="text" 
+                              value={areValuesVisible ? sub.planned.toFixed(2) : "••••••"} 
+                              readOnly 
+                              className="w-full h-full p-4 text-right bg-amber-50/30 focus:bg-white focus:ring-2 focus:ring-brand-500 border-0 text-slate-600 font-medium outline-none"
+                            />
+                          </td>
+                          <td className="p-4 text-center text-slate-400 text-xs">{formatPercentage(sub.planned, mockData.expenses.totalPlanned)}</td>
+                          <td className="p-4 text-right">{formatMoney(sub.realizedJan)}</td>
+                        </tr>
+                      ))}
+                    </>
+                  ))}
+
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }
