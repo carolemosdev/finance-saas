@@ -132,6 +132,9 @@ export function DashboardView({
           <a href="/investments" className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group text-slate-400 hover:bg-slate-800 hover:text-white">
              <Briefcase size={20} /> Investimentos
           </a>
+          <a href="/planning" className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group text-slate-400 hover:bg-slate-800 hover:text-white">
+            <Target size={20} /> Planejamento {/* Importe o ícone Target do lucide-react */}
+          </a>
           <a href="/credit-cards" className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group text-slate-400 hover:bg-slate-800 hover:text-white">
              <CreditCard size={20} /> Cartões
           </a>
