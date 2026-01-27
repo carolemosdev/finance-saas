@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { 
   Wallet, Briefcase, Target, CreditCard, LogOut, 
-  Eye, EyeOff, ChevronDown, ChevronRight, Settings,
-  Loader2, Calendar, TrendingUp, TrendingDown
+  Eye, EyeOff, ChevronDown, ChevronRight,
+  TrendingUp, Calendar, AlertCircle, Plus
 } from "lucide-react";
 import { MobileNav } from "../../components/MobileNav"; 
 import { toast } from "sonner"; 
@@ -36,7 +36,7 @@ type ExpenseCategory = {
   subcategories: PlanningItem[];
 };
 
-// --- SIDEBAR (Mantendo padrão) ---
+// --- SIDEBAR ---
 function Sidebar({ userEmail, onLogout }: any) {
   return (
     <aside className="w-72 bg-slate-900 hidden md:flex flex-col shadow-2xl z-10 relative shrink-0">
@@ -69,11 +69,9 @@ export default function PlanningPage() {
   const [incomes, setIncomes] = useState<PlanningItem[]>([]);
   const [expenses, setExpenses] = useState<ExpenseCategory[]>([]);
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  
-  // Meses visíveis na tabela (Janela Deslizante)
   const [visibleMonths, setVisibleMonths] = useState<string[]>([]);
 
-  // 1. Configurar Janela de Tempo (Mês Atual + 5)
+  // 1. Configurar Janela de Tempo
   useEffect(() => {
     const today = new Date();
     const currentMonthIndex = today.getMonth(); 
@@ -85,48 +83,48 @@ export default function PlanningPage() {
     setVisibleMonths(nextMonths);
   }, []);
 
-  // 2. Buscar Dados Reais
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push("/auth"); return; }
-      setUserEmail(user.email ?? null);
+  // 2. Carregar Dados Reais
+  const loadData = async () => {
+    setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { router.push("/auth"); return; }
+    setUserEmail(user.email ?? null);
 
-      // Busca Transações e Categorias
-      const { data: transactions } = await supabase.from('transactions').select('amount, type, date, category_id').eq('user_id', user.id);
-      const { data: categories } = await supabase.from('categories').select('*').eq('user_id', user.id);
+    const { data: categories } = await supabase.from('categories').select('*').eq('user_id', user.id);
+    const { data: transactions } = await supabase.from('transactions').select('amount, type, date, category_id').eq('user_id', user.id);
 
-      if (categories) {
-        processRealData(categories, transactions || []);
-      }
-      setLoading(false);
-    };
-    loadData();
-  }, [router]);
+    // Garante que só processa se houver categorias
+    if (categories) {
+      processRealData(categories, transactions || []);
+    } else {
+      setExpenses([]); // Zera se não houver categorias
+    }
+    setLoading(false);
+  };
 
-  // 3. Processamento Lógico
+  useEffect(() => { loadData(); }, [router]);
+
+  // 3. Processamento e FILTRO RIGOROSO
   const processRealData = (categoriesDb: any[], transactionsDb: any[]) => {
-    // A. Mapear Categorias de Despesa
+    
+    // A. Mapeia categorias
     const expensesMap: ExpenseCategory[] = categoriesDb.filter(c => c.type === 'EXPENSE').map(c => ({
       id: c.id, 
       name: c.name, 
-      planned: 0, // Inicia zerado, usuário edita
+      planned: Number(c.budget) || 0, // Garante que é número
       realized: {}, 
       subcategories: [] 
     }));
 
-    // B. Mapear Receita
     const incomesList: PlanningItem[] = [{ id: 'salary', name: "Receitas / Entradas", planned: 0, realized: {} }];
 
-    // C. Distribuir Transações nos Meses
+    // B. Preenche Valores
     transactionsDb.forEach(t => {
-      // Ajuste de fuso horário para garantir que dia 31 não vire dia 1 do outro mês
-      const dateParts = t.date.split('-'); 
-      const year = parseInt(dateParts[0]);
-      const monthIndex = parseInt(dateParts[1]) - 1; // Mês no JS começa em 0
-      
-      const monthKey = ALL_MONTH_KEYS[monthIndex];
+      const date = new Date(t.date);
+      // Ajuste de fuso para evitar erro de dia anterior
+      const userTimezoneOffset = date.getTimezoneOffset() * 60000;
+      const adjustedDate = new Date(date.getTime() + userTimezoneOffset);
+      const monthKey = ALL_MONTH_KEYS[adjustedDate.getMonth()];
 
       if (t.type === 'EXPENSE') {
         const cat = expensesMap.find(c => c.id === t.category_id);
@@ -138,17 +136,23 @@ export default function PlanningPage() {
       }
     });
 
-    // Filtro: Mostra apenas o que tem movimento ou meta
+    // C. O FILTRO MATADOR: Remove categorias "fantasmas"
     const activeExpenses = expensesMap.filter(cat => {
-       const hasRealized = Object.values(cat.realized).some(v => v > 0);
-       return cat.planned >= 0 || hasRealized; // Mostra todos por padrão para editar
+       // Verifica se existe ALGUM valor maior que zero em QUALQUER mês
+       const totalRealized = Object.values(cat.realized).reduce((acc, val) => acc + val, 0);
+       
+       // Verifica se existe meta
+       const hasPlanned = cat.planned > 0;
+
+       // SÓ FICA SE TIVER DINHEIRO ENVOLVIDO
+       return totalRealized > 0 || hasPlanned;
     });
 
     setExpenses(activeExpenses);
     setIncomes(incomesList);
   };
 
-  // --- Funções Auxiliares ---
+  // --- Helpers e Handlers ---
   const calculateCategoryTotal = (cat: ExpenseCategory, type: 'planned' | string) => {
     if (type === 'planned') return cat.planned;
     return cat.realized[type] || 0;
@@ -156,12 +160,9 @@ export default function PlanningPage() {
 
   const getTotalIncome = (month: string) => incomes.reduce((acc, item) => acc + (item.realized[month] || 0), 0);
   const getTotalExpense = (month: string) => expenses.reduce((acc, cat) => acc + calculateCategoryTotal(cat, month), 0);
-  
   const totalIncomePlanned = incomes.reduce((acc, item) => acc + item.planned, 0);
   const totalExpensePlanned = expenses.reduce((acc, cat) => acc + calculateCategoryTotal(cat, 'planned'), 0);
-
   const getMonthlyBalance = (month: string) => getTotalIncome(month) - getTotalExpense(month);
-  const balancePlanned = totalIncomePlanned - totalExpensePlanned;
 
   const handleMetaChange = (type: 'income' | 'expense', id: string | number, val: string) => {
     const value = parseFloat(val) || 0;
@@ -169,10 +170,22 @@ export default function PlanningPage() {
     else setExpenses(prev => prev.map(c => c.id === id ? { ...c, planned: value } : c));
   };
 
+  const handleMetaBlur = async (id: string | number, val: string) => {
+      const value = parseFloat(val) || 0;
+      if (typeof id === 'number' || !isNaN(Number(id))) {
+        await supabase.from('categories').update({ budget: value }).eq('id', id);
+        // Recarrega para garantir que o filtro não esconda a categoria se o valor mudar
+        if (value > 0) loadData(); 
+      }
+  };
+
   const formatMoney = (val: number) => !areValuesVisible ? "••••••" : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   const formatPercent = (val: number, total: number) => total === 0 ? "0%" : `${((val / total) * 100).toFixed(0)}%`;
   const handleLogout = async () => { await supabase.auth.signOut(); router.push("/auth"); };
   const toggleCategory = (id: string) => setExpandedCategories(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
+
+  const currentMonthKey = visibleMonths[0]; 
+  const currentBalance = getMonthlyBalance(currentMonthKey);
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 font-sans flex-col md:flex-row">
@@ -183,16 +196,21 @@ export default function PlanningPage() {
         <header className="bg-white/80 backdrop-blur-md sticky top-0 z-20 border-b border-slate-200 px-8 py-5 flex justify-between items-center">
           <div>
             <h2 className="text-2xl font-extrabold text-slate-800 flex items-center gap-3">
-              Planejamento e Controle
+              Planejamento
               <button onClick={() => setAreValuesVisible(!areValuesVisible)} className="ml-2 p-2 rounded-full hover:bg-slate-100 text-slate-400">
                 {areValuesVisible ? <Eye size={20} /> : <EyeOff size={20} />}
               </button>
             </h2>
-            <p className="text-sm text-slate-500 flex items-center gap-1 mt-1">
-               <Calendar size={14}/> Sincronizado com suas transações
-            </p>
           </div>
-          {loading && <div className="flex items-center gap-2 text-brand-600 text-sm font-bold animate-pulse"><Loader2 className="animate-spin" size={16}/> Atualizando...</div>}
+          
+          <div className="flex items-center gap-4">
+             <div className="text-right">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Saldo ({MONTH_LABELS[currentMonthKey]})</p>
+                <p className={`text-2xl font-extrabold ${currentBalance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                   {formatMoney(currentBalance)}
+                </p>
+             </div>
+          </div>
         </header>
 
         <div className="p-4 md:p-8 max-w-full mx-auto">
@@ -201,21 +219,16 @@ export default function PlanningPage() {
               <table className="w-full text-left border-collapse min-w-[1200px]">
                 
                 <thead>
-                  {/* LINHA DE SALDO (Topo fora da lista) */}
-                  <tr className="bg-slate-50">
-                    <th className="p-4 pl-6 text-xs font-extrabold text-slate-500 uppercase tracking-wider border-b border-slate-200 bg-slate-50 sticky left-0 z-20 h-[60px] flex items-center">
-                      SALDO REALIZADO
+                  {/* LINHA SALDO */}
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="p-4 pl-6 text-sm font-bold text-slate-400 uppercase tracking-wider bg-slate-50 sticky left-0 z-20 text-right" colSpan={3}>
+                      Resultado do Mês
                     </th>
-                    {/* Espaços vazios para alinhar com Planejamento e % */}
-                    <th className="border-b border-slate-200 bg-slate-50 min-w-[140px]"></th> 
-                    <th className="border-b border-slate-200 bg-slate-50 min-w-[60px]"></th>
-
                     {visibleMonths.map((month, index) => {
                       const bal = getMonthlyBalance(month);
-                      const isCurrent = index === 0;
                       return (
-                        <th key={month} className={`p-4 text-right border-b border-slate-200 min-w-[120px] ${isCurrent ? 'bg-blue-50/20' : ''}`}>
-                           <span className={`text-lg font-extrabold ${bal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        <th key={month} className="p-4 text-right min-w-[120px]">
+                           <span className={`text-base font-extrabold ${bal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                              {formatMoney(bal)}
                            </span>
                         </th>
@@ -223,15 +236,15 @@ export default function PlanningPage() {
                     })}
                   </tr>
 
-                  {/* LINHA DE TÍTULOS */}
+                  {/* CABEÇALHO */}
                   <tr className="bg-slate-100 text-slate-600 text-xs uppercase tracking-wider font-bold">
-                    <th className="p-4 pl-6 sticky left-0 bg-slate-100 z-10 border-b border-slate-200 min-w-[280px]">CATEGORIAS</th>
-                    <th className="p-4 text-right text-amber-700 bg-orange-50 border-x border-orange-100 min-w-[140px] border-b border-slate-200">PLANEJAMENTO</th>
+                    <th className="p-4 pl-6 sticky left-0 bg-slate-100 z-10 border-b border-slate-200 min-w-[280px]">Categorias</th>
+                    <th className="p-4 text-center border-x border-slate-200 min-w-[140px] border-b bg-amber-50 text-amber-800">Meta</th>
                     <th className="p-4 text-center min-w-[60px] border-b border-slate-200">%</th>
                     
                     {visibleMonths.map((month, index) => (
-                      <th key={month} className={`p-4 text-right min-w-[120px] whitespace-nowrap border-b border-slate-200 ${index === 0 ? 'text-purple-600 font-extrabold' : ''}`}>
-                         {MONTH_LABELS[month]} {index === 0 && <span className="ml-1 text-[9px] bg-purple-600 text-white px-1.5 py-0.5 rounded-full relative -top-0.5">VIGENTE</span>}
+                      <th key={month} className="p-4 text-right min-w-[120px] whitespace-nowrap border-b border-slate-200">
+                         {MONTH_LABELS[month]} {index === 0 && <span className="ml-1 text-[9px] bg-brand-600 text-white px-1.5 py-0.5 rounded-full relative -top-0.5">VIGENTE</span>}
                       </th>
                     ))}
                   </tr>
@@ -239,7 +252,7 @@ export default function PlanningPage() {
 
                 <tbody className="divide-y divide-slate-50">
                   
-                  {/* === RECEITAS (Verde) === */}
+                  {/* === RECEITAS === */}
                   <tr className="bg-emerald-600 text-white font-bold text-sm">
                     <td className="p-4 pl-6 sticky left-0 bg-emerald-600 z-10">Receitas Totais</td>
                     <td className="p-4 text-right bg-emerald-700/50">{formatMoney(totalIncomePlanned)}</td>
@@ -252,17 +265,15 @@ export default function PlanningPage() {
                       <td className="p-4 pl-10 sticky left-0 bg-white group-hover:bg-slate-50 z-10 border-r border-slate-100 flex items-center gap-2">
                         {item.name}
                       </td>
-                      {/* INPUT PLANEJAMENTO */}
-                      <td className="p-0 relative bg-orange-50/30">
+                      <td className="p-0 relative bg-amber-50/30">
                         <div className="absolute inset-0 m-1">
                           <input type="number" value={item.planned || ''} onChange={(e) => handleMetaChange('income', item.id, e.target.value)}
-                            className="w-full h-full text-right bg-orange-50/50 focus:bg-white focus:ring-2 focus:ring-emerald-500 rounded-md px-3 font-bold text-slate-700 outline-none placeholder:text-slate-300" placeholder="0,00" />
+                            className="w-full h-full text-right bg-transparent focus:bg-white focus:ring-2 focus:ring-emerald-500 rounded-md px-3 font-bold text-slate-700 outline-none" placeholder="0,00" />
                         </div>
                       </td>
                       <td className="p-4 text-center text-xs text-slate-400">{formatPercent(item.planned, totalIncomePlanned)}</td>
-                      {/* MESES REAIS */}
                       {visibleMonths.map((month, index) => (
-                        <td key={month} className={`p-4 text-right text-slate-600 text-sm ${index === 0 ? 'bg-purple-50/10 font-bold text-purple-700' : ''}`}>
+                        <td key={month} className="p-4 text-right text-slate-600 text-sm">
                           {formatMoney(item.realized[month] || 0)}
                         </td>
                       ))}
@@ -271,7 +282,7 @@ export default function PlanningPage() {
 
                   <tr><td colSpan={3 + visibleMonths.length} className="h-6 bg-slate-50 border-y border-slate-100"></td></tr>
 
-                  {/* === DESPESAS (Vermelho) === */}
+                  {/* === DESPESAS === */}
                   <tr className="bg-rose-600 text-white font-bold text-sm">
                     <td className="p-4 pl-6 sticky left-0 bg-rose-600 z-10">Despesas Totais</td>
                     <td className="p-4 text-right bg-rose-700/50">{formatMoney(totalExpensePlanned)}</td>
@@ -284,30 +295,26 @@ export default function PlanningPage() {
                     return (
                       <tr key={category.id} className="bg-white hover:bg-slate-50 group border-b border-slate-50">
                         <td className="p-4 pl-6 sticky left-0 bg-white group-hover:bg-slate-50 z-10 border-r border-slate-100 font-bold text-slate-700 flex items-center gap-2">
-                           {category.subcategories.length > 0 && (
-                             <button onClick={() => toggleCategory(category.id as string)} className="text-slate-400 hover:text-brand-600">
-                               {expandedCategories.includes(category.id as string) ? <ChevronDown size={16}/> : <ChevronRight size={16}/>}
-                             </button>
-                           )}
                            {category.name}
                         </td>
                         
-                        {/* INPUT PLANEJAMENTO */}
-                        <td className="p-0 relative bg-orange-50/30">
+                        <td className="p-0 relative bg-amber-50/30">
                            <div className="absolute inset-0 m-1">
-                             <input type="number" value={category.planned || ''} onChange={(e) => handleMetaChange('expense', category.id, e.target.value)}
-                               className="w-full h-full text-right bg-orange-50/50 focus:bg-white focus:ring-2 focus:ring-rose-500 rounded-md px-3 font-bold text-slate-800 outline-none placeholder:text-slate-300" placeholder="0,00" />
+                             <input type="number" 
+                               value={category.planned || ''} 
+                               onChange={(e) => handleMetaChange('expense', category.id, e.target.value)}
+                               onBlur={(e) => handleMetaBlur(category.id, e.target.value)}
+                               className="w-full h-full text-right bg-transparent focus:bg-white focus:ring-2 focus:ring-rose-500 rounded-md px-3 font-bold text-slate-800 outline-none" placeholder="0,00" />
                            </div>
                         </td>
                         
                         <td className="p-4 text-center text-xs text-slate-500">{formatPercent(catPlanned, totalExpensePlanned)}</td>
                         
-                        {/* MESES REAIS */}
                         {visibleMonths.map((month, index) => {
                           const val = category.realized[month] || 0;
                           const isOverBudget = category.planned > 0 && val > category.planned;
                           return (
-                            <td key={month} className={`p-4 text-right transition-colors ${index === 0 ? 'bg-purple-50/10 font-medium' : 'text-slate-600'} ${isOverBudget ? 'text-rose-600 font-bold' : ''}`}>
+                            <td key={month} className={`p-4 text-right transition-colors ${isOverBudget ? 'text-rose-600 font-bold' : 'text-slate-600'}`}>
                               {formatMoney(val)}
                             </td>
                           );
@@ -320,8 +327,9 @@ export default function PlanningPage() {
                     <tr>
                       <td colSpan={3 + visibleMonths.length} className="p-12 text-center text-slate-400 italic">
                         <div className="flex flex-col items-center gap-2">
+                           <AlertCircle className="text-slate-300" size={32}/>
                            <p>Nenhuma despesa encontrada.</p>
-                           <a href="/" className="text-brand-600 hover:underline text-sm font-bold">Criar transação no Dashboard</a>
+                           <a href="/" className="text-brand-600 hover:underline text-sm font-bold bg-brand-50 px-3 py-1 rounded-full mt-1 inline-block">Criar transação no Dashboard</a>
                         </div>
                       </td>
                     </tr>
