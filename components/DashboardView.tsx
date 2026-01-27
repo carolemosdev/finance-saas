@@ -20,7 +20,7 @@ import {
   Wallet, TrendingUp, TrendingDown, Briefcase, Plus, 
   ArrowUpRight, CreditCard, ArrowRight, LogOut, Lightbulb, 
   PiggyBank, AlertTriangle, CheckCircle2, Eye, EyeOff,
-  Target // <--- ADICIONE ESTE AQUI NO FINAL DA LISTA
+  Target 
 } from "lucide-react";
 
 interface DashboardProps {
