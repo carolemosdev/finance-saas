@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { 
   Wallet, Briefcase, Target, CreditCard, LogOut, 
-  Menu, X, Eye, EyeOff, ChevronDown, ChevronRight, Settings,
-  Repeat, TrendingUp, Plus, Trash2, Loader2, Calendar
+  Menu, Eye, EyeOff, ChevronDown, ChevronRight, Settings,
+  TrendingUp, Plus, Trash2, Loader2, Calendar, AlertCircle
 } from "lucide-react";
 import { MobileNav } from "../../components/MobileNav"; 
 import { toast } from "sonner"; 
@@ -17,9 +17,9 @@ type MonthlyValue = { [month: string]: number };
 type PlanningItem = {
   id: string | number;
   name: string;
-  planned: number;
+  planned: number;     // Meta (Manual)
   isFixed: boolean;
-  realized: MonthlyValue;
+  realized: MonthlyValue; // Realizado (Automático do Banco)
 };
 
 type ExpenseCategory = {
@@ -30,8 +30,7 @@ type ExpenseCategory = {
   subcategories: PlanningItem[];
 };
 
-// --- CONFIGURAÇÃO DE MESES (TODOS OS 12) ---
-// Precisamos de todos os meses para fazer a rotação correta
+// Configuração dos 12 meses para a lógica de rotação
 const ALL_MONTH_KEYS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 const MONTH_LABELS: { [key: string]: string } = { 
   'jan': 'JAN', 'fev': 'FEV', 'mar': 'MAR', 'abr': 'ABR', 'mai': 'MAI', 'jun': 'JUN',
@@ -71,17 +70,12 @@ export default function PlanningPage() {
   const [incomes, setIncomes] = useState<PlanningItem[]>([]);
   const [expenses, setExpenses] = useState<ExpenseCategory[]>([]);
   const [userEmail, setUserEmail] = useState<string | null>(null);
-
-  // --- ESTADO DOS MESES VISÍVEIS ---
   const [visibleMonths, setVisibleMonths] = useState<string[]>([]);
 
-  // 1. CALCULAR MESES DINAMICAMENTE AO INICIAR
+  // 1. Definição da Janela de Tempo (Mês Atual + 5 Futuros)
   useEffect(() => {
     const today = new Date();
-    const currentMonthIndex = today.getMonth(); // 0 = Jan, 1 = Fev...
-    
-    // Pega os próximos 6 meses (com rotação se virar o ano)
-    // Ex: Se for Nov (10), pega [10, 11, 0, 1, 2, 3]
+    const currentMonthIndex = today.getMonth(); 
     const nextMonths = [];
     for (let i = 0; i < 6; i++) {
         const index = (currentMonthIndex + i) % 12;
@@ -90,7 +84,7 @@ export default function PlanningPage() {
     setVisibleMonths(nextMonths);
   }, []);
 
-  // 2. CARREGAR DADOS
+  // 2. Busca de Dados Reais
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
@@ -98,6 +92,7 @@ export default function PlanningPage() {
       if (!user) { router.push("/auth"); return; }
       setUserEmail(user.email ?? null);
 
+      // Busca Transações e Categorias
       const { data: transactions } = await supabase.from('transactions').select('amount, type, date, category_id').eq('user_id', user.id);
       const { data: categories } = await supabase.from('categories').select('*').eq('user_id', user.id);
 
@@ -107,39 +102,49 @@ export default function PlanningPage() {
     loadData();
   }, [router]);
 
-  // 3. PROCESSAR DADOS
+  // 3. Processamento e Preenchimento Automático
   const processRealData = (categoriesDb: any[], transactionsDb: any[]) => {
+    // A. Cria a estrutura base das despesas com as categorias do usuário
     const expensesMap: ExpenseCategory[] = categoriesDb.filter(c => c.type === 'EXPENSE').map(c => ({
-      id: c.id, name: c.name, planned: 0, 
-      realized: {}, // Inicializa vazio
+      id: c.id, 
+      name: c.name, 
+      planned: 0, // Poderia vir de uma coluna 'budget' no futuro
+      realized: {}, // Objeto vazio para ser preenchido
       subcategories: [] 
     }));
 
-    const incomesList: PlanningItem[] = [{ id: 'salary', name: "Salário / Receitas", planned: 0, isFixed: true, realized: {} }];
+    // B. Cria estrutura para receitas
+    const incomesList: PlanningItem[] = [{ id: 'salary', name: "Receitas / Entradas", planned: 0, isFixed: true, realized: {} }];
 
+    // C. Distribui as transações nos meses corretos
     transactionsDb.forEach(t => {
       const date = new Date(t.date);
-      const monthKey = ALL_MONTH_KEYS[date.getMonth()]; // Usa o índice correto (0-11)
+      // Ajuste de fuso horário simples para garantir o mês correto
+      const monthKey = ALL_MONTH_KEYS[date.getUTCMonth()]; 
 
       if (t.type === 'EXPENSE') {
         const cat = expensesMap.find(c => c.id === t.category_id);
-        if (cat) cat.realized[monthKey] = (cat.realized[monthKey] || 0) + t.amount;
+        if (cat) {
+          // Soma o valor na chave do mês correspondente (ex: 'jan', 'fev')
+          cat.realized[monthKey] = (cat.realized[monthKey] || 0) + t.amount;
+        }
       } else if (t.type === 'INCOME') {
         incomesList[0].realized[monthKey] = (incomesList[0].realized[monthKey] || 0) + t.amount;
       }
     });
 
-    // Filtro: Mostra apenas se tiver meta ou realizado (em qualquer mês do ano)
+    // D. Filtro: Mostra apenas categorias que têm Movimentação (realized) OU Meta (planned)
     const activeExpenses = expensesMap.filter(cat => {
        const hasRealized = Object.values(cat.realized).some(v => v > 0);
-       return cat.planned > 0 || hasRealized;
+       const hasPlanned = cat.planned > 0;
+       return hasRealized || hasPlanned;
     });
 
     setExpenses(activeExpenses);
     setIncomes(incomesList);
   };
 
-  // --- CÁLCULOS ---
+  // --- Funções de Cálculo e Interface ---
   const calculateCategoryTotal = (cat: ExpenseCategory, type: 'planned' | string) => {
     if (type === 'planned') return cat.planned;
     return cat.realized[type] || 0;
@@ -154,7 +159,6 @@ export default function PlanningPage() {
   const getMonthlyBalance = (month: string) => getTotalIncome(month) - getTotalExpense(month);
   const balancePlanned = totalIncomePlanned - totalExpensePlanned;
 
-  // --- HANDLERS ---
   const handleMetaChange = (type: 'income' | 'expense', id: string | number, val: string) => {
     const value = parseFloat(val) || 0;
     if (type === 'income') setIncomes(prev => prev.map(i => i.id === id ? { ...i, planned: value } : i));
@@ -181,7 +185,7 @@ export default function PlanningPage() {
               </button>
             </h2>
             <p className="text-sm text-slate-500 flex items-center gap-1 mt-1">
-               <Calendar size={14}/> Exibindo mês atual e futuros
+               <Calendar size={14}/> Dados sincronizados automaticamente com suas transações
             </p>
           </div>
           {loading && <div className="flex items-center gap-2 text-brand-600 text-sm font-bold animate-pulse"><Loader2 className="animate-spin" size={16}/> Sincronizando...</div>}
@@ -192,23 +196,22 @@ export default function PlanningPage() {
             <div className="overflow-x-auto pb-4">
               <table className="w-full text-left border-collapse min-w-[1200px]">
                 
-                {/* --- HEADER FIXO DA TABELA --- */}
+                {/* --- HEADER FIXO --- */}
                 <thead>
-                  {/* LINHA 1: SALDO MENSAL */}
-                  <tr className="bg-slate-50">
-                    <th className="p-4 pl-6 text-sm font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 bg-slate-50 sticky left-0 z-20">
-                      Saldo Mensal
+                  {/* Linha de Saldo */}
+                  <tr className="bg-slate-50/80">
+                    <th className="p-4 pl-6 text-xs font-extrabold text-slate-500 uppercase tracking-wider border-b border-slate-200 bg-slate-50 sticky left-0 z-20 h-[60px] flex items-center">
+                      Saldo Realizado
                     </th>
-                    <th className="border-b border-slate-200 bg-slate-50"></th> 
-                    <th className="border-b border-slate-200 bg-slate-50"></th>
+                    <th className="border-b border-slate-200 bg-slate-50 min-w-[140px]"></th> 
+                    <th className="border-b border-slate-200 bg-slate-50 min-w-[60px]"></th>
 
-                    {/* Loop Dinâmico dos Meses Visíveis */}
                     {visibleMonths.map((month, index) => {
                       const bal = getMonthlyBalance(month);
-                      const isCurrent = index === 0; // O primeiro mês da lista é o atual
+                      const isCurrent = index === 0;
                       return (
-                        <th key={month} className={`p-4 text-right border-b border-slate-200 min-w-[120px] ${isCurrent ? 'bg-blue-50/50' : ''}`}>
-                           <span className={`text-lg font-extrabold px-3 py-1 rounded-lg ${bal >= 0 ? 'text-emerald-700 bg-emerald-50' : 'text-rose-700 bg-rose-50'}`}>
+                        <th key={month} className={`p-4 text-right border-b border-slate-200 min-w-[120px] ${isCurrent ? 'bg-blue-50/30' : ''}`}>
+                           <span className={`text-lg font-extrabold ${bal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                              {formatMoney(bal)}
                            </span>
                         </th>
@@ -216,15 +219,15 @@ export default function PlanningPage() {
                     })}
                   </tr>
 
-                  {/* LINHA 2: TÍTULOS DAS COLUNAS */}
+                  {/* Linha de Títulos */}
                   <tr className="bg-slate-100 text-slate-600 text-xs uppercase tracking-wider font-bold">
-                    <th className="p-4 pl-6 sticky left-0 bg-slate-100 z-10 border-b border-slate-200 min-w-[280px]">Categorias e Subcategorias</th>
-                    <th className="p-4 text-right bg-amber-50 text-amber-800 border-x border-amber-100 min-w-[140px] border-b border-slate-200">Planejamento</th>
+                    <th className="p-4 pl-6 sticky left-0 bg-slate-100 z-10 border-b border-slate-200 min-w-[280px]">Categorias</th>
+                    <th className="p-4 text-right text-amber-700 bg-amber-50 border-x border-amber-100 min-w-[140px] border-b border-slate-200">PLANEJAMENTO</th>
                     <th className="p-4 text-center min-w-[60px] border-b border-slate-200">%</th>
                     
                     {visibleMonths.map((month, index) => (
-                      <th key={month} className={`p-4 text-right min-w-[120px] whitespace-nowrap border-b border-slate-200 ${index === 0 ? 'text-brand-600' : ''}`}>
-                         {MONTH_LABELS[month]} {index === 0 && <span className="ml-1 text-[9px] bg-brand-600 text-white px-1.5 py-0.5 rounded-full">ATUAL</span>}
+                      <th key={month} className={`p-4 text-right min-w-[120px] whitespace-nowrap border-b border-slate-200 ${index === 0 ? 'text-brand-600 font-extrabold' : ''}`}>
+                         {MONTH_LABELS[month]} {index === 0 && <span className="ml-1 text-[9px] bg-brand-600 text-white px-1.5 py-0.5 rounded-full relative -top-0.5">VIGENTE</span>}
                       </th>
                     ))}
                   </tr>
@@ -232,7 +235,7 @@ export default function PlanningPage() {
 
                 <tbody className="divide-y divide-slate-50">
                   
-                  {/* === RECEITAS === */}
+                  {/* === RECEITAS (Verde) === */}
                   <tr className="bg-emerald-600 text-white font-bold text-sm">
                     <td className="p-4 pl-6 sticky left-0 bg-emerald-600 z-10">Receitas Totais</td>
                     <td className="p-4 text-right bg-emerald-700/50">{formatMoney(totalIncomePlanned)}</td>
@@ -245,20 +248,24 @@ export default function PlanningPage() {
                       <td className="p-4 pl-10 sticky left-0 bg-white group-hover:bg-slate-50 z-10 border-r border-slate-100">
                         {item.name}
                       </td>
-                      <td className="p-0 relative bg-amber-50/10">
+                      <td className="p-0 relative bg-amber-50/20">
                         <div className="absolute inset-0 m-1">
                           <input type="number" value={item.planned || ''} onChange={(e) => handleMetaChange('income', item.id, e.target.value)}
-                            className="w-full h-full text-right bg-amber-50/30 focus:bg-white focus:ring-2 focus:ring-emerald-500 rounded-md px-3 font-bold text-slate-700 outline-none placeholder:text-slate-300" placeholder="0,00" />
+                            className="w-full h-full text-right bg-amber-50/40 focus:bg-white focus:ring-2 focus:ring-emerald-500 rounded-md px-3 font-bold text-slate-700 outline-none placeholder:text-slate-300" placeholder="0,00" />
                         </div>
                       </td>
                       <td className="p-4 text-center text-xs text-slate-400">{formatPercent(item.planned, totalIncomePlanned)}</td>
-                      {visibleMonths.map(month => <td key={month} className="p-4 text-right text-slate-600 text-sm">{formatMoney(item.realized[month] || 0)}</td>)}
+                      {visibleMonths.map((month, index) => (
+                        <td key={month} className={`p-4 text-right text-slate-600 text-sm ${index === 0 ? 'bg-slate-50/50 font-semibold' : ''}`}>
+                          {formatMoney(item.realized[month] || 0)}
+                        </td>
+                      ))}
                     </tr>
                   ))}
 
                   <tr><td colSpan={3 + visibleMonths.length} className="h-6 bg-slate-50 border-y border-slate-100"></td></tr>
 
-                  {/* === DESPESAS === */}
+                  {/* === DESPESAS (Vermelho) === */}
                   <tr className="bg-rose-600 text-white font-bold text-sm">
                     <td className="p-4 pl-6 sticky left-0 bg-rose-600 z-10">Despesas Totais</td>
                     <td className="p-4 text-right bg-rose-700/50">{formatMoney(totalExpensePlanned)}</td>
@@ -278,19 +285,21 @@ export default function PlanningPage() {
                            )}
                            {category.name}
                         </td>
-                        <td className="p-0 relative bg-amber-50/10">
+                        
+                        <td className="p-0 relative bg-amber-50/20">
                            <div className="absolute inset-0 m-1">
                              <input type="number" value={category.planned || ''} onChange={(e) => handleMetaChange('expense', category.id, e.target.value)}
-                               className="w-full h-full text-right bg-amber-50/50 focus:bg-white focus:ring-2 focus:ring-rose-500 rounded-md px-3 font-bold text-slate-800 outline-none placeholder:text-slate-300" placeholder="0,00" />
+                               className="w-full h-full text-right bg-amber-50/40 focus:bg-white focus:ring-2 focus:ring-rose-500 rounded-md px-3 font-bold text-slate-800 outline-none placeholder:text-slate-300" placeholder="0,00" />
                            </div>
                         </td>
+                        
                         <td className="p-4 text-center text-xs text-slate-500">{formatPercent(catPlanned, totalExpensePlanned)}</td>
                         
-                        {visibleMonths.map(month => {
+                        {visibleMonths.map((month, index) => {
                           const val = category.realized[month] || 0;
                           const isOverBudget = category.planned > 0 && val > category.planned;
                           return (
-                            <td key={month} className={`p-4 text-right transition-colors ${isOverBudget ? 'text-rose-600 font-bold bg-rose-50/30' : 'text-slate-600'}`}>
+                            <td key={month} className={`p-4 text-right transition-colors ${index === 0 ? 'bg-slate-50/50' : ''} ${isOverBudget ? 'text-rose-600 font-bold' : 'text-slate-600'}`}>
                               {formatMoney(val)}
                             </td>
                           );
@@ -302,7 +311,7 @@ export default function PlanningPage() {
                   {expenses.length === 0 && !loading && (
                     <tr>
                       <td colSpan={3 + visibleMonths.length} className="p-8 text-center text-slate-400 italic">
-                        Nenhuma despesa registrada ainda.
+                        Nenhuma despesa registrada. Comece adicionando transações no Dashboard.
                       </td>
                     </tr>
                   )}
