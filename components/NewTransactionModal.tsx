@@ -11,6 +11,7 @@ interface NewTransactionModalProps {
   onClose: () => void;
   userId: string | null;
   transactionToEdit?: any;
+  onSuccess: () => void;
 }
 
 export function NewTransactionModal({ isOpen, onClose, userId, transactionToEdit }: NewTransactionModalProps) {
