@@ -5,14 +5,26 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { getCurrentPrice } from "../../lib/priceService";
 import { 
-  LayoutDashboard, Wallet, TrendingUp, TrendingDown, PieChart, 
-  Target, Plus, Briefcase, ShieldAlert, RefreshCw, Loader2, Trash2, Pencil, CreditCard, LogOut
+  Wallet, Briefcase, TrendingUp, Plus, Loader2, Calendar, 
+  Filter, Settings, ChevronDown, CreditCard, PieChart, Target, LayoutDashboard, LogOut, RefreshCw, Trash2, Pencil
 } from "lucide-react";
-import { PieChart as RePie, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { NewAssetModal } from "../../components/NewAssetModal";
 import { MobileNav } from "../../components/MobileNav";
+import { toast } from "sonner";
 
-interface Asset { id: number; name: string; ticker: string; type: 'FIXED' | 'FII' | 'STOCK' | 'CRYPTO'; quantity: number; current_amount: number; price?: number; }
+// --- TIPAGEM ---
+interface Asset { 
+  id: number; 
+  name: string; 
+  ticker: string; 
+  type: 'FIXED' | 'FII' | 'STOCK' | 'CRYPTO'; 
+  quantity: number; 
+  current_amount: number; 
+  price?: number; 
+}
+
+// Colunas de meses para simular a visão temporal da imagem
+const MONTH_COLS = ['Dez 2025', 'Jan 2026', 'Fev 2026'];
 
 export default function InvestmentsPage() {
   const router = useRouter();
@@ -24,13 +36,14 @@ export default function InvestmentsPage() {
   const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
   const [assetToEdit, setAssetToEdit] = useState<Asset | undefined>(undefined);
 
-  const ASSET_COLORS = { FIXED: "#10B981", FII: "#3B82F6", STOCK: "#F59E0B", CRYPTO: "#EF4444" };
-
+  // --- CARREGAMENTO DE DADOS (Sua lógica original mantida) ---
   useEffect(() => {
     const checkUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/auth"); return; }
-      setUserId(user.id); setUserEmail(user.email ?? null); fetchAssets(user.id);
+      setUserId(user.id); 
+      setUserEmail(user.email ?? null); 
+      fetchAssets(user.id);
     };
     checkUser();
   }, [router]);
@@ -40,7 +53,14 @@ export default function InvestmentsPage() {
     const { data: assetsData } = await supabase.from("assets").select("*").eq("user_id", uid);
     if (assetsData) {
       const updatedAssets = await Promise.all(assetsData.map(async (asset) => {
-        const livePrice = await getCurrentPrice(asset.ticker || asset.name, asset.type);
+        // Tenta pegar preço real, se falhar usa o valor do banco
+        let livePrice = asset.current_amount / (asset.quantity || 1); 
+        try {
+            const price = await getCurrentPrice(asset.ticker || asset.name, asset.type);
+            if (price) livePrice = price;
+        } catch (e) {
+            console.error("Erro ao buscar preço", e);
+        }
         return { ...asset, price: livePrice, current_amount: livePrice * asset.quantity };
       }));
       setAssets(updatedAssets as any);
@@ -48,35 +68,27 @@ export default function InvestmentsPage() {
     setIsLoading(false);
   };
 
-  const handleDeleteAsset = async (id: number) => { if (!confirm("Tem certeza?")) return; await supabase.from("assets").delete().eq("id", id); if(userId) fetchAssets(userId); };
+  const handleDeleteAsset = async (id: number) => { 
+      if (!confirm("Tem certeza que deseja excluir este ativo?")) return; 
+      await supabase.from("assets").delete().eq("id", id); 
+      if(userId) fetchAssets(userId); 
+      toast.success("Ativo removido.");
+  };
+
   const handleEditAsset = (asset: Asset) => { setAssetToEdit(asset); setIsAssetModalOpen(true); };
   const closeModals = () => { setIsAssetModalOpen(false); setAssetToEdit(undefined); if (userId) fetchAssets(userId); };
   
-  const calculateRiskProfile = () => {
-    const total = assets.reduce((acc, curr) => acc + curr.current_amount, 0);
-    if (total === 0) return { label: "Iniciante", color: "text-slate-500", desc: "Adicione ativos." };
-    const riskValue = assets.filter(a => a.type === 'STOCK' || a.type === 'CRYPTO').reduce((acc, c) => acc + c.current_amount, 0);
-    const riskPercentage = (riskValue / total) * 100;
-    if (riskPercentage > 40) return { label: "Arrojado", color: "text-rose-600", desc: "Maior risco." };
-    if (riskPercentage > 15) return { label: "Moderado", color: "text-amber-600", desc: "Equilíbrio." };
-    return { label: "Conservador", color: "text-emerald-600", desc: "Segurança." };
-  };
-
-  const formatMoney = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
-  const totalInvested = assets.reduce((acc, c) => acc + c.current_amount, 0);
-  const riskProfile = calculateRiskProfile();
-  
-  const chartData = [
-    { name: 'Renda Fixa', value: assets.filter(a => a.type === 'FIXED').reduce((acc, c) => acc + c.current_amount, 0), color: ASSET_COLORS.FIXED },
-    { name: 'FIIs', value: assets.filter(a => a.type === 'FII').reduce((acc, c) => acc + c.current_amount, 0), color: ASSET_COLORS.FII },
-    { name: 'Ações', value: assets.filter(a => a.type === 'STOCK').reduce((acc, c) => acc + c.current_amount, 0), color: ASSET_COLORS.STOCK },
-    { name: 'Cripto', value: assets.filter(a => a.type === 'CRYPTO').reduce((acc, c) => acc + c.current_amount, 0), color: ASSET_COLORS.CRYPTO },
-  ].filter(d => d.value > 0);
-
   const handleLogout = async () => { await supabase.auth.signOut(); router.push("/auth"); };
-  
+  const formatMoney = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+
+  // --- CÁLCULOS DO RESUMO (Topo Direito) ---
+  const totalInvested = assets.reduce((acc, c) => acc + c.current_amount, 0);
+  const financialIndependenceGoal = 1000000; // Meta de 1 Milhão (Exemplo)
+  const independenceRatio = (totalInvested / financialIndependenceGoal) * 100;
+
+  // Componente Sidebar Link (Reutilizado do seu código)
   const SidebarLink = ({ href, icon: Icon, label, active = false }: any) => (
-    <a href={href} className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group ${active ? 'bg-brand-600 text-white shadow-md shadow-brand-600/30' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+    <a href={href} className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group ${active ? 'bg-teal-600 text-white shadow-md shadow-teal-600/30' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
       <Icon size={20} className={active ? 'text-white' : 'text-slate-500 group-hover:text-white transition-colors'} /> {label}
     </a>
   );
@@ -84,104 +96,220 @@ export default function InvestmentsPage() {
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 font-sans flex-col md:flex-row">
       <MobileNav userEmail={userEmail} onLogout={handleLogout} />
-      <aside className="w-72 bg-slate-900 hidden md:flex flex-col shadow-2xl z-10 relative">
+      
+      {/* SIDEBAR (Corrigida para destacar Investimentos em Teal) */}
+      <aside className="w-72 bg-slate-900 hidden md:flex flex-col shadow-2xl z-10 relative shrink-0">
         <div className="p-8">
           <h1 className="text-3xl font-extrabold text-white flex items-center gap-3 tracking-tight">
-            <div className="bg-brand-600 p-2 rounded-lg shadow-lg shadow-brand-600/50"><Wallet className="w-7 h-7 text-white" /></div>FinSaaS
+            <div className="bg-teal-600 p-2 rounded-lg shadow-lg"><Briefcase className="w-7 h-7 text-white" /></div>
+            Flui
           </h1>
         </div>
         <nav className="flex-1 px-6 space-y-3 overflow-y-auto py-4 custom-scrollbar">
           <p className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Principal</p>
           <SidebarLink href="/" icon={LayoutDashboard} label="Dashboard" />
-          <SidebarLink href="/incomes" icon={TrendingUp} label="Receitas" />
-          <SidebarLink href="/expenses" icon={TrendingDown} label="Despesas" />
+          <SidebarLink href="/planning" icon={Target} label="Planejamento" />
           <p className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mt-8 mb-2">Gestão</p>
           <SidebarLink href="/investments" icon={PieChart} label="Investimentos" active={true} />
-          <SidebarLink href="/goals" icon={Target} label="Metas" />
           <SidebarLink href="/credit-cards" icon={CreditCard} label="Cartões" />
         </nav>
-        <div className="p-6 bg-slate-950/50 m-4 rounded-2xl border border-slate-800 flex flex-col items-center text-center">
-          <div className="w-12 h-12 bg-brand-900 rounded-full flex items-center justify-center text-brand-300 font-bold text-lg mb-3 shadow-md shadow-brand-900/50">{userEmail?.charAt(0).toUpperCase()}</div>
-          <div className="w-full overflow-hidden mb-4"><p className="text-sm text-white font-medium truncate w-full" title={userEmail || ''}>{userEmail}</p><p className="text-xs text-slate-500 mt-0.5">Conta Gratuita</p></div>
-          <button onClick={handleLogout} className="flex items-center justify-center gap-2 px-4 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition-all w-full border border-slate-700 hover:border-slate-600 active:scale-95"><LogOut size={16} /> <span>Sair da conta</span></button>
+        <div className="p-6 m-4 flex flex-col items-center text-center">
+             <button onClick={handleLogout} className="flex items-center justify-center gap-2 px-4 py-2 text-sm text-slate-400 hover:text-white w-full"><LogOut size={16} /> Sair</button>
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-8 relative z-0">
-        <header className="flex justify-between items-center mb-8">
-          <div><h2 className="text-3xl font-extrabold text-slate-800">Minha Carteira</h2><p className="text-slate-500 flex items-center gap-2 mt-1">Valores em tempo real. {userId && <button onClick={() => fetchAssets(userId)} className="text-brand-600 hover:underline text-xs flex items-center gap-1 font-bold uppercase"><RefreshCw size={12}/> Atualizar</button>}</p></div>
-        </header>
-
-        {isLoading ? <div className="text-center py-20"><Loader2 className="animate-spin mx-auto text-brand-600" size={32}/></div> : (
-          <div className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* PATRIMÔNIO */}
-              <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-200/60 border-0 flex justify-between items-center relative overflow-hidden">
-                <div className="absolute top-0 right-0 -mr-12 -mt-12 w-32 h-32 bg-brand-50 rounded-full blur-3xl opacity-70"></div>
-                <div className="relative z-10"><p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Patrimônio</p><h3 className="text-3xl font-extrabold text-slate-900 mt-2">{formatMoney(totalInvested)}</h3></div>
-                <div className="bg-brand-100 p-3 rounded-2xl relative z-10"><Briefcase className="text-brand-600" size={32}/></div>
-              </div>
-              {/* PERFIL */}
-              <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-200/60 border-0 flex justify-between items-center relative overflow-hidden">
-                  <div className="absolute top-0 right-0 -mr-12 -mt-12 w-32 h-32 bg-slate-50 rounded-full blur-3xl opacity-70"></div>
-                <div className="relative z-10"><p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Perfil</p><h3 className={`text-3xl font-extrabold mt-2 ${riskProfile.color}`}>{riskProfile.label}</h3><p className="text-xs text-slate-400 mt-1 font-medium">{riskProfile.desc}</p></div>
-                <div className="bg-slate-100 p-3 rounded-2xl relative z-10"><ShieldAlert className="text-slate-600" size={32}/></div>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* GRÁFICO */}
-              <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-200/60 border-0 lg:col-span-1 h-auto min-h-[400px] flex flex-col">
-                <h4 className="font-bold text-slate-700 mb-6">Alocação de Ativos</h4>
-                <div className="flex flex-col gap-6 flex-1">
-                  <div className="h-[200px] relative"><ResponsiveContainer width="100%" height="100%"><RePie><Pie data={chartData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" stroke="none">{chartData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}</Pie><Tooltip formatter={(v:any) => formatMoney(v)} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} /></RePie></ResponsiveContainer><div className="absolute inset-0 flex items-center justify-center pointer-events-none"><Briefcase size={24} className="text-slate-300" /></div></div>
-                  <div className="flex flex-col gap-3">{chartData.map((item, index) => (<div key={index} className="flex items-center justify-between text-sm group"><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: item.color }}></div><span className="text-slate-600 font-medium">{item.name}</span></div><span className="font-bold text-slate-800">{formatMoney(item.value)}</span></div>))}</div>
-                </div>
-              </div>
-              {/* LISTA DE ATIVOS */}
-              <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/60 border-0 lg:col-span-2 flex flex-col">
-                <div className="p-6 border-b border-slate-100 flex justify-between items-center"><h4 className="font-bold text-lg text-slate-700">Seus Ativos</h4><button onClick={() => setIsAssetModalOpen(true)} className="text-sm bg-brand-600 text-white px-4 py-2 rounded-full hover:bg-brand-700 flex items-center gap-1 font-medium shadow-lg shadow-brand-600/30 transition-all"><Plus size={16} /> Adicionar</button></div>
+      {/* --- CONTEÚDO PRINCIPAL (Estilo Planilha) --- */}
+      <main className="flex-1 overflow-y-auto relative z-0 p-4 md:p-6 bg-slate-100/50">
+        
+        {/* Bloco de Controles e Resumo */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 mb-6">
+            <div className="flex flex-col xl:flex-row gap-6 justify-between items-start xl:items-end">
                 
-                <div className="flex-1">
-                  {/* Mobile Cards */}
-                  <div className="md:hidden divide-y divide-slate-100">
-                    {assets.map(asset => (
-                      <div key={asset.id} className="p-4 flex flex-col gap-2">
-                        <div className="flex justify-between items-start">
-                            <div><p className="font-bold text-slate-800">{asset.ticker}</p><span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold uppercase">{asset.type}</span></div>
-                            <p className="font-extrabold text-slate-800">{formatMoney(asset.current_amount)}</p>
+                {/* Lado Esquerdo: Filtros e Título */}
+                <div className="space-y-4 w-full xl:w-auto flex-1">
+                    <h2 className="text-xl font-extrabold text-slate-800 flex items-center gap-2">
+                        Meus Investimentos
+                        {userId && <button onClick={() => fetchAssets(userId)} className="p-1.5 bg-slate-100 hover:bg-teal-100 text-slate-500 hover:text-teal-700 rounded-full transition-colors" title="Atualizar Preços"><RefreshCw size={14} className={isLoading ? "animate-spin" : ""}/></button>}
+                    </h2>
+                    
+                    <p className="text-xs font-bold text-slate-500 uppercase bg-rose-50 border border-rose-100 text-rose-600 px-3 py-1.5 rounded w-fit">
+                        Gastos planejados do mês atual: R$ 9.471,45 (Meta)
+                    </p>
+
+                    <div className="flex flex-wrap items-center gap-2 pt-2">
+                        {/* Fake Date Pickers para visual igual da imagem */}
+                        <div className="flex items-center gap-2 bg-white border border-slate-300 rounded-md px-3 py-1.5 text-sm font-bold text-slate-700 shadow-sm">
+                            <Calendar size={14} className="text-slate-400" /> 
+                            <span>Jan 2026</span>
+                            <ChevronDown size={14} className="opacity-50 ml-2"/>
                         </div>
-                        <div className="flex justify-between items-center text-xs text-slate-500 mt-1"><span>Qtd: {asset.quantity}</span><span>Preço: {formatMoney(asset.price || 0)}</span></div>
-                        <div className="flex justify-end gap-2 mt-2">
-                          <button onClick={() => handleEditAsset(asset)} className="bg-slate-50 p-2 rounded-lg text-slate-400 hover:text-brand-600"><Pencil size={14}/></button>
-                          <button onClick={() => handleDeleteAsset(asset.id)} className="bg-slate-50 p-2 rounded-lg text-slate-400 hover:text-red-600"><Trash2 size={14}/></button>
+                        <span className="text-slate-300 mx-1">—</span>
+                        <div className="flex items-center gap-2 bg-white border border-slate-300 rounded-md px-3 py-1.5 text-sm font-bold text-slate-700 shadow-sm">
+                             <Calendar size={14} className="text-slate-400" /> 
+                             <span>Dez 2026</span>
+                             <ChevronDown size={14} className="opacity-50 ml-2"/>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                  {/* Desktop Table */}
-                  <div className="hidden md:block overflow-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead className="bg-slate-50/50 text-slate-500 text-xs uppercase tracking-wider font-semibold"><tr><th className="p-5">Ativo</th><th className="p-5">Qtd.</th><th className="p-5 text-right">Preço</th><th className="p-5 text-right">Total</th><th className="p-5"></th></tr></thead>
-                      <tbody className="divide-y divide-slate-100 text-sm">
-                        {assets.map(asset => (
-                          <tr key={asset.id} className="hover:bg-slate-50/80 transition-colors">
-                            <td className="p-5 font-bold text-slate-800">{asset.ticker} <span className="block text-xs text-slate-400 font-normal mt-0.5">{asset.type}</span></td>
-                            <td className="p-5 text-slate-600 font-medium">{asset.quantity}</td>
-                            <td className="p-5 text-right text-slate-500">{formatMoney(asset.price || 0)}</td>
-                            <td className="p-5 text-right font-extrabold text-slate-800">{formatMoney(asset.current_amount)}</td>
-                            <td className="p-5 text-right flex justify-end gap-2"><button onClick={() => handleEditAsset(asset)} className="bg-slate-100 text-slate-400 hover:text-brand-600 p-2 rounded-lg transition-colors"><Pencil size={16} /></button><button onClick={() => handleDeleteAsset(asset.id)} className="bg-slate-100 text-slate-400 hover:text-red-600 p-2 rounded-lg transition-colors"><Trash2 size={16} /></button></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        
+                        <div className="w-px h-6 bg-slate-300 mx-3 hidden sm:block"></div>
+
+                        {/* Botões de Ação */}
+                        <button onClick={() => setIsAssetModalOpen(true)} className="flex items-center gap-1 bg-slate-800 text-white px-3 py-1.5 rounded-md text-sm font-bold shadow hover:bg-slate-900 transition-all">
+                            <Plus size={16}/> <span className="hidden sm:inline">Novo</span>
+                        </button>
+                        <button className="p-1.5 text-slate-500 hover:bg-slate-100 rounded-md"><Filter size={18}/></button>
+                        <button className="p-1.5 text-slate-500 hover:bg-slate-100 rounded-md"><Settings size={18}/></button>
+                    </div>
                 </div>
-              </div>
+
+                {/* Lado Direito: Grid de Resumo (Igual Imagem) */}
+                <div className="w-full xl:w-auto overflow-x-auto pb-1">
+                    <div className="grid grid-rows-4 gap-y-px bg-slate-200 border border-slate-200 rounded-lg overflow-hidden text-sm min-w-[600px] shadow-sm">
+                        
+                        {/* Linha 1: Rendimento */}
+                        <div className="grid grid-cols-5 items-stretch bg-white">
+                            <div className="bg-teal-600 text-white font-bold px-3 py-1.5 col-span-2 text-right text-[10px] uppercase tracking-wide flex items-center justify-end">Rendimento Mensal</div>
+                            {MONTH_COLS.map((m, i) => (
+                                <div key={i} className={`px-3 py-1.5 font-bold text-center flex items-center justify-center ${i === 1 ? 'text-emerald-600 bg-emerald-50' : 'text-slate-400'}`}>
+                                    {i === 1 ? '+ 1.2%' : '---'}
+                                </div>
+                            ))}
+                        </div>
+                        
+                        {/* Linha 2: Grau Indep */}
+                        <div className="grid grid-cols-5 items-stretch bg-white">
+                            <div className="bg-teal-600/90 text-white font-bold px-3 py-1.5 col-span-2 text-right text-[10px] uppercase tracking-wide flex items-center justify-end">Grau de Indep. Financeira</div>
+                            {MONTH_COLS.map((m, i) => (
+                                <div key={i} className={`px-3 py-1.5 font-bold text-center flex items-center justify-center ${i === 1 ? 'text-teal-700' : 'text-slate-400'}`}>
+                                    {i === 1 ? `${independenceRatio.toFixed(2)}%` : '---'}
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Linha 3: Saldo */}
+                        <div className="grid grid-cols-5 items-stretch bg-white">
+                            <div className="bg-teal-600/80 text-white font-bold px-3 py-1.5 col-span-2 text-right text-[10px] uppercase tracking-wide flex items-center justify-end">Saldo Dos Investimentos</div>
+                            {MONTH_COLS.map((m, i) => (
+                                <div key={i} className={`px-3 py-1.5 font-bold text-center flex items-center justify-center bg-slate-50 ${i === 1 ? 'text-slate-900' : 'text-slate-400'}`}>
+                                    {i === 1 ? formatMoney(totalInvested) : '---'}
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Linha 4: Valor Aplicado */}
+                        <div className="grid grid-cols-5 items-stretch bg-white">
+                             <div className="bg-teal-600/70 text-white font-bold px-3 py-1.5 col-span-2 text-right text-[10px] uppercase tracking-wide flex items-center justify-end">Valor Total Aplicado</div>
+                             {MONTH_COLS.map((m, i) => (
+                                <div key={i} className={`px-3 py-1.5 font-bold text-center flex items-center justify-center ${i === 1 ? 'text-slate-900' : 'text-slate-400'}`}>
+                                    {i === 1 ? formatMoney(totalInvested * 0.9) : '---'} {/* Simulado 90% */}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
             </div>
-          </div>
-        )}
+        </div>
+
+        {/* === TABELA DE ATIVOS (Estilo Planilha) === */}
+        <div className="bg-white rounded-t-xl shadow-sm border border-slate-200 overflow-hidden">
+             <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[1000px]">
+                    <thead>
+                        {/* Cabeçalho Verde Escuro */}
+                        <tr className="bg-teal-700 text-white text-[10px] font-extrabold uppercase tracking-wider">
+                            <th className="p-3 w-10 text-center">#</th>
+                            <th className="p-3">Inst. Fin. - Partição</th>
+                            <th className="p-3">Emissor</th>
+                            <th className="p-3">Produto</th>
+                            <th className="p-3">Vencimento</th>
+                            {MONTH_COLS.map((month, i) => (
+                                <th key={i} className={`p-3 text-center min-w-[120px] border-l border-teal-600 ${i === 1 ? 'bg-teal-800/60' : ''}`}>{month}</th>
+                            ))}
+                            <th className="p-3 text-center w-20">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody className="text-xs">
+                        {isLoading ? (
+                             <tr><td colSpan={6 + MONTH_COLS.length} className="p-12 text-center"><Loader2 className="animate-spin inline text-teal-600 w-8 h-8"/></td></tr>
+                        ) : assets.length === 0 ? (
+                             <tr><td colSpan={6 + MONTH_COLS.length} className="p-12 text-center text-slate-400 font-medium">Nenhum ativo encontrado. Adicione um novo!</td></tr>
+                        ) : assets.map((asset, index) => {
+                            const isEven = index % 2 === 0;
+                            const rowBg = isEven ? 'bg-white' : 'bg-slate-50/50';
+                            
+                            // Definições visuais baseadas no tipo
+                            const emissor = asset.type === 'FIXED' ? 'Tesouro/Banco' : asset.type === 'CRYPTO' ? 'Blockchain' : 'B3';
+                            const produto = asset.ticker || asset.name;
+                            
+                            return (
+                                <tr key={asset.id} className={`${rowBg} hover:bg-teal-50 transition-colors border-b border-slate-100 group`}>
+                                    
+                                    {/* Checkbox / Icon */}
+                                    <td className="p-3 text-center">
+                                        <div className={`w-2 h-2 rounded-full mx-auto ${asset.type === 'FIXED' ? 'bg-teal-500' : asset.type === 'STOCK' ? 'bg-amber-500' : 'bg-rose-500'}`}></div>
+                                    </td>
+                                    
+                                    {/* Inst Fin */}
+                                    <td className="p-3 text-slate-600 font-semibold">
+                                        Corretora Principal
+                                    </td>
+
+                                    {/* Emissor */}
+                                    <td className="p-3 text-slate-500 font-medium">
+                                        {emissor}
+                                    </td>
+
+                                    {/* Produto */}
+                                    <td className="p-3 font-bold text-slate-700">
+                                        {produto}
+                                    </td>
+
+                                    {/* Vencimento (Fixo para layout, ou poderia ser campo do banco) */}
+                                    <td className="p-3 text-slate-400 font-mono">
+                                        {asset.type === 'FIXED' ? '15/08/2030' : '-'} 
+                                    </td>
+
+                                    {/* Colunas de Meses (Com Linha Dupla Simulada) */}
+                                    {MONTH_COLS.map((m, i) => (
+                                        <td key={i} className={`p-1.5 border-l border-slate-100 ${i === 1 ? 'bg-teal-50/20' : ''}`}>
+                                            <div className="flex flex-col">
+                                                <div className="flex justify-between text-[9px] text-slate-400 mb-0.5">
+                                                    <span>Aplicado</span>
+                                                    <span>-</span>
+                                                </div>
+                                                <div className="flex justify-between text-[11px] font-bold text-slate-700">
+                                                    <span>Saldo</span>
+                                                    {/* Mostra valor real apenas na coluna do meio (mês atual) para simular */}
+                                                    <span>{i === 1 ? formatMoney(asset.current_amount) : '---'}</span>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    ))}
+
+                                    {/* Ações */}
+                                    <td className="p-3 text-center">
+                                        <div className="flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button onClick={() => handleEditAsset(asset)} className="p-1.5 hover:bg-slate-200 rounded text-slate-500"><Pencil size={14}/></button>
+                                            <button onClick={() => handleDeleteAsset(asset.id)} className="p-1.5 hover:bg-red-100 rounded text-red-500"><Trash2 size={14}/></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+             </div>
+        </div>
+
       </main>
-      <NewAssetModal isOpen={isAssetModalOpen} onClose={closeModals} userId={userId} assetToEdit={assetToEdit} />
+      
+      {/* MODAL (Mantendo o componente existente) */}
+      <NewAssetModal 
+        isOpen={isAssetModalOpen} 
+        onClose={closeModals} 
+        userId={userId} 
+        assetToEdit={assetToEdit} 
+        onSuccess={() => userId && fetchAssets(userId)}
+      />
     </div>
   );
 }
