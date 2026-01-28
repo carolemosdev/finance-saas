@@ -6,19 +6,19 @@ import { getCurrentPrice } from "../lib/priceService";
 export default async function Home() {
   const supabase = await createClient();
 
+  // 1. Auth no Servidor
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     redirect("/auth");
   }
 
-  // --- 1. Fetch Paralelo (Adicionei categoriesPromise) ---
+  // 2. Fetch Paralelo
   const transactionsPromise = supabase
     .from("transactions")
     .select(`*, categories (name)`)
     .eq('user_id', user.id)
     .order('date', { ascending: false });
 
-  // Precisamos das categorias para ver o Orçamento (Budget)
   const categoriesPromise = supabase
     .from("categories")
     .select("*")
@@ -30,7 +30,7 @@ export default async function Home() {
 
   const [
     { data: transactionsData },
-    { data: categoriesData }, // Novo
+    { data: categoriesData },
     { data: assetsData },
     { data: goalsData },
     { data: cardsData }
@@ -43,12 +43,12 @@ export default async function Home() {
   ]);
 
   const transactions = transactionsData || [];
-  const categories = categoriesData || []; // Novo
+  const categories = categoriesData || [];
   const assets = assetsData || [];
   const goals = goalsData || [];
   const rawCards = cardsData || [];
 
-  // --- 2. Processamento de Cartões ---
+  // 3. Processamento
   const cards = rawCards.map((card) => {
     const cardTrans = transactions.filter((t: any) => 
       t.credit_card_id === card.id && 
@@ -59,7 +59,6 @@ export default async function Home() {
     return { ...card, current_invoice: invoice };
   });
 
-  // --- 3. Processamento de Investimentos ---
   let totalInvested = 0;
   if (assets.length > 0) {
     await Promise.all(assets.map(async (asset) => {
@@ -72,11 +71,11 @@ export default async function Home() {
     }));
   }
 
-  // --- 4. Renderização ---
-  // Removemos o cálculo de resumo fixo daqui, pois a View vai calcular dinamicamente baseada no filtro de Mês
-return (
+  // 4. Passando props para a View
+  // REMOVIDO: hasAnyTransaction e hasAnyInvestment (a View calcula isso internamente agora)
+  return (
     <DashboardView 
-      transactions={transactions} // <--- MUDANÇA AQUI: Era initialTransactions, mudei para transactions
+      transactions={transactions}
       categories={categories}
       cards={cards}
       assets={assets}
@@ -84,9 +83,6 @@ return (
       userEmail={user.email || ""}
       userId={user.id}
       totalInvested={totalInvested}
-      // Se seu componente DashboardView pedir estas props opcionais, mantenha:
-      hasAnyTransaction={hasAnyTransaction} 
-      hasAnyInvestment={hasAnyInvestment}
     />
   );
 }
