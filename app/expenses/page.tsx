@@ -4,237 +4,139 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { 
-  LayoutDashboard, Wallet, TrendingUp, TrendingDown, PieChart, 
-  Loader2, Trash2, Pencil, CreditCard, LogOut
-} from "lucide-react"; 
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { NewTransactionModal } from "../../components/NewTransactionModal"; 
-import { MobileNav } from "../../components/MobileNav";
-
-interface Transaction {
-  id: number;
-  description: string;
-  amount: number;
-  date: string;
-  type: "INCOME" | "EXPENSE"; 
-  category_id: number; 
-  categories: { name: string } | null;
-  credit_card_id?: number | null;
-}
+  Wallet, TrendingDown, Target, CreditCard, LogOut, 
+  Plus, Calendar, Search, Filter, ArrowLeft, Loader2, Trash2, Pencil
+} from "lucide-react";
+import { MobileNav } from "../../components/MobileNav"; 
+import { NewTransactionModal } from "../../components/NewTransactionModal";
+import { toast } from "sonner";
 
 export default function ExpensesPage() {
   const router = useRouter();
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [chartData, setChartData] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  
+  // Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [transactionToEdit, setTransactionToEdit] = useState<Transaction | undefined>(undefined);
+  const [transactionToEdit, setTransactionToEdit] = useState<any>(undefined);
 
-  const fetchData = async (uid: string) => {
+  const fetchData = async () => {
+    setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { router.push("/auth"); return; }
+    
+    setUserId(user.id);
+    setUserEmail(user.email ?? null);
+
     const { data } = await supabase
-      .from("transactions")
+      .from('transactions')
       .select(`*, categories (name)`)
-      .eq("user_id", uid)
-      .eq("type", "EXPENSE")
-      .order("date", { ascending: false });
+      .eq('user_id', user.id)
+      .eq('type', 'EXPENSE') // Só despesas
+      .order('date', { ascending: false });
 
-    if (data) {
-      // @ts-ignore
-      setTransactions(data);
-      // @ts-ignore
-      processChartData(data);
-    }
-    setIsLoading(false);
+    if (data) setTransactions(data);
+    setLoading(false);
   };
 
-  useEffect(() => {
-    const checkUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push("/auth"); return; }
-      setUserId(user.id);
-      setUserEmail(user.email ?? null);
-      fetchData(user.id);
-    };
-    checkUser();
-  }, [router]);
+  useEffect(() => { fetchData(); }, [router]);
 
-  const handleDelete = async (id: number) => {
-    if(!confirm("Tem certeza que deseja excluir esta despesa?")) return;
-    const { error } = await supabase.from("transactions").delete().eq("id", id);
-    if (userId) fetchData(userId);
+  const handleDelete = async (id: string) => {
+    if(!confirm("Tem certeza que deseja excluir?")) return;
+    await supabase.from('transactions').delete().eq('id', id);
+    toast.success("Despesa excluída.");
+    fetchData();
   };
 
-  const handleEdit = (transaction: Transaction) => {
+  const handleEdit = (transaction: any) => {
     setTransactionToEdit(transaction);
     setIsModalOpen(true);
   };
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    setTransactionToEdit(undefined); 
-    if (userId) fetchData(userId); 
+    setTransactionToEdit(undefined);
   };
 
-  const processChartData = (data: Transaction[]) => {
-    const grouped = data.reduce((acc: any, curr) => {
-      const cat = curr.categories?.name || "Outros";
-      acc[cat] = (acc[cat] || 0) + curr.amount;
-      return acc;
-    }, {});
-    const chartArray = Object.keys(grouped).map(key => ({ name: key, value: grouped[key] })).sort((a, b) => b.value - a.value);
-    setChartData(chartArray);
-  };
-
-  const formatMoney = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push("/auth");
-  };
-
-  const SidebarLink = ({ href, icon: Icon, label, active = false }: any) => (
-    <a href={href} className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group ${active ? 'bg-brand-600 text-white shadow-md shadow-brand-600/30' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
-      <Icon size={20} className={active ? 'text-white' : 'text-slate-500 group-hover:text-white transition-colors'} /> {label}
-    </a>
-  );
+  const handleLogout = async () => { await supabase.auth.signOut(); router.push("/auth"); };
+  const formatMoney = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 font-sans flex-col md:flex-row">
       <MobileNav userEmail={userEmail} onLogout={handleLogout} />
-
-      <aside className="w-72 bg-slate-900 hidden md:flex flex-col shadow-2xl z-10 relative">
-        <div className="p-8">
-          <h1 className="text-3xl font-extrabold text-white flex items-center gap-3 tracking-tight">
-            <div className="bg-brand-600 p-2 rounded-lg shadow-lg shadow-brand-600/50">
-              <Wallet className="w-7 h-7 text-white" /> 
-            </div>
-            FinSaaS
-          </h1>
-        </div>
+      
+      {/* Sidebar Simplificada para páginas internas */}
+      <aside className="w-72 bg-slate-900 hidden md:flex flex-col shadow-2xl z-10 relative shrink-0">
+        <div className="p-8"><h1 className="text-3xl font-extrabold text-white flex items-center gap-3">Flui</h1></div>
         <nav className="flex-1 px-6 space-y-3 overflow-y-auto py-4 custom-scrollbar">
-          <p className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Principal</p>
-          <SidebarLink href="/" icon={LayoutDashboard} label="Dashboard" />
-          <SidebarLink href="/incomes" icon={TrendingUp} label="Receitas" />
-          <SidebarLink href="/expenses" icon={TrendingDown} label="Despesas" active={true} />
-          <p className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mt-8 mb-2">Gestão</p>
-          <SidebarLink href="/investments" icon={PieChart} label="Investimentos" />
-          <SidebarLink href="/credit-cards" icon={CreditCard} label="Cartões" />
+           <a href="/" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all"><ArrowLeft size={20} /> Voltar ao Dashboard</a>
+           <div className="h-px bg-slate-800 my-2"></div>
+           <a href="/expenses" className="flex items-center gap-3 px-4 py-3 rounded-xl bg-rose-600 text-white shadow-md"><TrendingDown size={20} /> Despesas</a>
         </nav>
-        <div className="p-6 bg-slate-950/50 m-4 rounded-2xl border border-slate-800 flex flex-col items-center text-center">
-          <div className="w-12 h-12 bg-brand-900 rounded-full flex items-center justify-center text-brand-300 font-bold text-lg mb-3 shadow-md shadow-brand-900/50">
-              {userEmail?.charAt(0).toUpperCase()}
-          </div>
-          <div className="w-full overflow-hidden mb-4">
-             <p className="text-sm text-white font-medium truncate w-full" title={userEmail || ''}>{userEmail}</p>
-             <p className="text-xs text-slate-500 mt-0.5">Conta Gratuita</p>
-          </div>
-          <button onClick={handleLogout} className="flex items-center justify-center gap-2 px-4 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition-all w-full border border-slate-700 hover:border-slate-600 active:scale-95">
-            <LogOut size={16} /> <span>Sair da conta</span>
-          </button>
-        </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-8 relative z-0">
-        <h2 className="text-3xl font-extrabold text-slate-800 mb-8">Minhas Despesas</h2>
+      <main className="flex-1 overflow-y-auto relative z-0 p-4 md:p-8">
         
-        {isLoading ? <div className="text-center py-20"><Loader2 className="animate-spin mx-auto text-brand-600" size={32}/></div> : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
-            {/* GRÁFICO (Com fix de altura style={{ height: 300 }}) */}
-            <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-200/60 border-0 lg:col-span-1 h-[400px] flex flex-col">
-              <h3 className="font-bold text-lg mb-6 text-slate-700">Ranking de Gastos</h3>
-              <div className="w-full flex-1 min-w-0" style={{ height: 300 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 10 }}>
-                    <XAxis type="number" hide />
-                    <YAxis dataKey="name" type="category" width={90} tick={{fontSize: 12, fill: '#64748b'}} axisLine={false} tickLine={false} />
-                    <Tooltip 
-                      formatter={(value: any) => formatMoney(value)} 
-                      cursor={{fill: '#f1f5f9', radius: 4}} 
-                      contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
-                    />
-                    <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={32}>
-                      <Cell fill="#f43f5e" /> {/* Rose-500 */}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+        <div className="flex justify-between items-center mb-8">
+           <div>
+             <h2 className="text-2xl font-extrabold text-slate-800 flex items-center gap-2">
+               <div className="p-2 bg-rose-100 rounded-lg text-rose-600"><TrendingDown size={24}/></div>
+               Minhas Despesas
+             </h2>
+             <p className="text-slate-500 text-sm mt-1">Gerencie todas as suas saídas.</p>
+           </div>
+           <button onClick={() => { setTransactionToEdit(undefined); setIsModalOpen(true); }} className="bg-slate-900 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg hover:bg-slate-800 transition-all flex items-center gap-2">
+             <Plus size={18}/> Nova Despesa
+           </button>
+        </div>
 
-            {/* LISTA (Com Cards Mobile) */}
-            <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/60 border-0 overflow-hidden lg:col-span-2 flex flex-col">
-              <div className="p-6 border-b border-slate-100">
-                 <h3 className="font-bold text-lg text-slate-700">Histórico de Saídas</h3>
-              </div>
-              
-              <div className="flex-1">
-                 {/* MOBILE CARDS */}
-                 <div className="md:hidden divide-y divide-slate-100">
-                  {transactions.map((t) => (
-                    <div key={t.id} className="p-4 flex flex-col gap-3">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="font-bold text-slate-800 text-sm">{t.description}</p>
-                          <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider mt-1 inline-block">
-                            {t.categories?.name}
-                          </span>
-                        </div>
-                        <p className="font-extrabold text-rose-600 text-sm">{formatMoney(t.amount)}</p>
-                      </div>
-                      <div className="flex justify-end gap-3 pt-2">
-                        <button onClick={() => handleEdit(t)} className="flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-brand-600 px-3 py-2 rounded-lg bg-slate-50">
-                          <Pencil size={14} /> Editar
-                        </button>
-                        <button onClick={() => handleDelete(t.id)} className="flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-rose-600 px-3 py-2 rounded-lg bg-slate-50">
-                          <Trash2 size={14} /> Excluir
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  {transactions.length === 0 && <div className="p-8 text-center text-slate-400 text-sm">Nenhuma despesa.</div>}
-                </div>
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+           {loading ? (
+             <div className="p-12 flex justify-center"><Loader2 className="animate-spin text-slate-400"/></div>
+           ) : transactions.length === 0 ? (
+             <div className="p-12 text-center text-slate-400">Nenhuma despesa encontrada.</div>
+           ) : (
+             <div className="overflow-x-auto">
+               <table className="w-full text-left">
+                 <thead className="bg-slate-50 border-b border-slate-100">
+                   <tr>
+                     <th className="p-5 text-xs font-bold text-slate-500 uppercase">Descrição</th>
+                     <th className="p-5 text-xs font-bold text-slate-500 uppercase">Categoria</th>
+                     <th className="p-5 text-xs font-bold text-slate-500 uppercase">Data</th>
+                     <th className="p-5 text-xs font-bold text-slate-500 uppercase text-right">Valor</th>
+                     <th className="p-5 text-xs font-bold text-slate-500 uppercase text-center">Ações</th>
+                   </tr>
+                 </thead>
+                 <tbody className="divide-y divide-slate-100">
+                   {transactions.map((t) => (
+                     <tr key={t.id} className="hover:bg-slate-50 transition-colors group">
+                       <td className="p-5 font-bold text-slate-700">{t.description}</td>
+                       <td className="p-5"><span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-xs font-bold uppercase">{t.categories?.name || 'Geral'}</span></td>
+                       <td className="p-5 text-sm text-slate-500">{new Date(t.date).toLocaleDateString('pt-BR')}</td>
+                       <td className="p-5 text-right font-bold text-rose-600">- {formatMoney(t.amount)}</td>
+                       <td className="p-5 flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => handleEdit(t)} className="p-2 text-slate-400 hover:text-brand-600 hover:bg-slate-100 rounded-lg"><Pencil size={16}/></button>
+                          <button onClick={() => handleDelete(t.id)} className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"><Trash2 size={16}/></button>
+                       </td>
+                     </tr>
+                   ))}
+                 </tbody>
+               </table>
+             </div>
+           )}
+        </div>
 
-                {/* DESKTOP TABLE */}
-                <div className="hidden md:block overflow-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead className="bg-slate-50/50 text-slate-500 text-xs uppercase tracking-wider font-semibold">
-                      <tr><th className="p-5">Descrição</th><th className="p-5">Categoria</th><th className="p-5 text-right">Valor</th><th className="p-5 text-right">Ações</th></tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {transactions.map((t) => (
-                        <tr key={t.id} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="p-5 font-bold text-slate-800">{t.description}</td>
-                          <td className="p-5">
-                            <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider">{t.categories?.name}</span>
-                          </td>
-                          <td className="p-5 text-right font-extrabold text-rose-600">{formatMoney(t.amount)}</td>
-                          <td className="p-5 text-right flex justify-end gap-2">
-                            <button onClick={() => handleEdit(t)} className="bg-slate-100 hover:bg-brand-100 text-slate-400 hover:text-brand-600 p-2 rounded-lg transition-colors">
-                              <Pencil size={16} />
-                            </button>
-                            <button onClick={() => handleDelete(t.id)} className="bg-slate-100 hover:bg-red-100 text-slate-400 hover:text-red-600 p-2 rounded-lg transition-colors">
-                              <Trash2 size={16} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                      {transactions.length === 0 && <tr><td colSpan={4} className="p-12 text-center text-slate-400">Nenhuma despesa registrada.</td></tr>}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </main>
 
+      {/* AQUI ESTAVA O ERRO: Agora passamos onSuccess */}
       <NewTransactionModal 
         isOpen={isModalOpen} 
         onClose={handleCloseModal} 
         userId={userId} 
-        transactionToEdit={transactionToEdit} 
+        transactionToEdit={transactionToEdit}
+        onSuccess={fetchData} // <--- CORREÇÃO APLICADA
       />
     </div>
   );
