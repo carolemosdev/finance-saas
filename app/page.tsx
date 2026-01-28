@@ -1,65 +1,65 @@
 import { redirect } from "next/navigation";
-import { createClient } from "../lib/supabase-server"; // Cliente Server
+import { createClient } from "../lib/supabase-server"; 
 import { DashboardView } from "../components/DashboardView";
 import { getCurrentPrice } from "../lib/priceService";
 
-// Server Component (Async)
 export default async function Home() {
   const supabase = await createClient();
 
-  // 1. Auth no Servidor
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     redirect("/auth");
   }
 
-  // 2. Fetch Paralelo
+  // --- 1. Fetch Paralelo (Adicionei categoriesPromise) ---
   const transactionsPromise = supabase
     .from("transactions")
     .select(`*, categories (name)`)
     .eq('user_id', user.id)
     .order('date', { ascending: false });
 
-  const assetsPromise = supabase
-    .from("assets")
+  // Precisamos das categorias para ver o Orçamento (Budget)
+  const categoriesPromise = supabase
+    .from("categories")
     .select("*")
     .eq("user_id", user.id);
 
-  const goalsPromise = supabase
-    .from("goals")
-    .select("*")
-    .eq("user_id", user.id);
-
-  const cardsPromise = supabase
-    .from("credit_cards")
-    .select("*")
-    .eq("user_id", user.id);
+  const assetsPromise = supabase.from("assets").select("*").eq("user_id", user.id);
+  const goalsPromise = supabase.from("goals").select("*").eq("user_id", user.id);
+  const cardsPromise = supabase.from("credit_cards").select("*").eq("user_id", user.id);
 
   const [
     { data: transactionsData },
+    { data: categoriesData }, // Novo
     { data: assetsData },
     { data: goalsData },
     { data: cardsData }
-  ] = await Promise.all([transactionsPromise, assetsPromise, goalsPromise, cardsPromise]);
+  ] = await Promise.all([
+    transactionsPromise, 
+    categoriesPromise, 
+    assetsPromise, 
+    goalsPromise, 
+    cardsPromise
+  ]);
 
   const transactions = transactionsData || [];
+  const categories = categoriesData || []; // Novo
   const assets = assetsData || [];
   const goals = goalsData || [];
   const rawCards = cardsData || [];
 
-  // 3. Processamento
+  // --- 2. Processamento de Cartões ---
   const cards = rawCards.map((card) => {
-  // FILTRO NOVO: Só soma despesas que NÃO estão pagas (t.is_paid !== true)
-  const cardTrans = transactions.filter((t: any) => 
-    t.credit_card_id === card.id && 
-    t.type === 'EXPENSE' && 
-    !t.is_paid // <--- O SEGREDO ESTÁ AQUI
-  );
+    const cardTrans = transactions.filter((t: any) => 
+      t.credit_card_id === card.id && 
+      t.type === 'EXPENSE' && 
+      !t.is_paid 
+    );
+    const invoice = cardTrans.reduce((acc, curr: any) => acc + curr.amount, 0);
+    return { ...card, current_invoice: invoice };
+  });
 
-  const invoice = cardTrans.reduce((acc, curr: any) => acc + curr.amount, 0);
-  return { ...card, current_invoice: invoice };
-});
-
+  // --- 3. Processamento de Investimentos ---
   let totalInvested = 0;
   if (assets.length > 0) {
     await Promise.all(assets.map(async (asset) => {
@@ -72,36 +72,18 @@ export default async function Home() {
     }));
   }
 
-  const now = new Date();
-  const currentMonth = now.getMonth();
-  const currentYear = now.getFullYear();
-  let income = 0, expense = 0, total = 0;
-
-  transactions.forEach((item: any) => {
-    if (item.type === "INCOME") total += item.amount; else total -= item.amount;
-    const tDate = new Date(item.date);
-    if (tDate.getMonth() === currentMonth && tDate.getFullYear() === currentYear) {
-      if (item.type === "INCOME") income += item.amount; else expense += item.amount;
-    }
-  });
-
-  const summary = { income, expense, total };
-  const hasAnyTransaction = transactions.length > 0;
-  const hasAnyInvestment = (assets.length > 0 || goals.length > 0);
-
-  // 4. Passando props padronizadas para a View
+  // --- 4. Renderização ---
+  // Removemos o cálculo de resumo fixo daqui, pois a View vai calcular dinamicamente baseada no filtro de Mês
   return (
     <DashboardView 
-      transactions={transactions}
+      initialTransactions={transactions}
+      categories={categories} // Passando categorias
       cards={cards}
       assets={assets}
       goals={goals}
       userEmail={user.email || ""}
       userId={user.id}
-      summary={summary}
       totalInvested={totalInvested}
-      hasAnyTransaction={hasAnyTransaction}
-      hasAnyInvestment={hasAnyInvestment}
     />
   );
 }

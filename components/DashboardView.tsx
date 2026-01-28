@@ -1,425 +1,370 @@
 "use client";
-import { supabase } from "../lib/supabase";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { WhatsNewModal } from "./WhatsNewModal";
-// --- ADICIONEI ESTES IMPORTS QUE FALTAVAM ---
-import { SmartAlertsWidget } from "./SmartAlertsWidget";
-import { OnboardingWidget } from "./OnboardingWidget";
-import { InsightsWidget } from "./InsightsWidget";
-import { ExpenseChart } from "./ExpenseChart";
-import { NewTransactionModal } from "./NewTransactionModal";
-import { PayInvoiceButton } from "./PayInvoiceButton"; // Certifique-se que este arquivo existe, senão remova esta linha
-// --------------------------------------------
 
+import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "../lib/supabase";
 import { 
-  Wallet, 
-  TrendingUp, 
-  TrendingDown, 
-  Briefcase, 
-  Plus, 
-  ArrowUpRight, 
-  CreditCard, 
-  ArrowRight, 
-  LogOut, 
-  Lightbulb, 
-  PiggyBank, 
-  AlertTriangle, 
-  CheckCircle2, 
-  Eye, 
-  EyeOff,
-  Target,
-  Menu,
-  X
+  Wallet, TrendingUp, TrendingDown, Target, CreditCard, LogOut, 
+  Menu, Plus, PieChart as PieIcon, ArrowRight, X, Loader2
 } from "lucide-react";
+// Certifique-se que o caminho desses imports está correto no seu projeto
+import { NewTransactionModal } from "./NewTransactionModal"; 
+import { 
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
+  BarChart, Bar, Cell, PieChart, Pie
+} from 'recharts';
+
+// --- CONFIGURAÇÃO ---
+const MONTH_NAMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 interface DashboardProps {
   transactions: any[];
+  categories: any[];
   cards: any[];
   assets: any[];
   goals: any[];
   userEmail: string | null;
   userId: string;
-  summary: { income: number; expense: number; total: number; };
   totalInvested: number;
-  hasAnyTransaction: boolean;
-  hasAnyInvestment: boolean;
+  hasAnyTransaction?: boolean;
+  hasAnyInvestment?: boolean;
 }
 
 export function DashboardView({ 
   transactions = [], 
+  categories = [], 
   cards = [], 
-  assets = [],
-  goals = [],
-  userEmail,
-  userId,
-  summary,
-  totalInvested,
-  hasAnyTransaction,
-  hasAnyInvestment
+  userEmail, 
+  userId 
 }: DashboardProps) {
   
   const router = useRouter();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  
-  // 1. NOVO ESTADO: Controla a visibilidade dos valores (Começa visível)
-  const [areValuesVisible, setAreValuesVisible] = useState(true);
 
-  const userName = userEmail?.split("@")[0] || "Pessoa Incrível";
+  // --- FILTROS DE DATA (Estado Local) ---
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
-  const formatMoney = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  // --- LÓGICA DE PROCESSAMENTO (useMemo para performance) ---
+  const { summary, areaChartData, categoryStats, budgetProgress, filteredTransactions } = useMemo(() => {
+    
+    // 1. Filtrar Transações pelo Mês/Ano Selecionado
+    const filtered = transactions.filter(t => {
+      const d = new Date(t.date);
+      // Ajuste simples de fuso horário para garantir o mês correto
+      const dateOffset = new Date(d.getTime() + d.getTimezoneOffset() * 60000);
+      return dateOffset.getMonth() === selectedMonth && dateOffset.getFullYear() === selectedYear;
+    });
 
-  // 2. NOVA FUNÇÃO MÁGICA: Decide o que mostrar na tela
-  const displayValue = (value: number) => {
-    if (areValuesVisible) {
-      return formatMoney(value);
-    }
-    return "••••••"; // O "borrão" de privacidade
-  };
+    // 2. Calcular Resumo (Cards do Topo)
+    const income = filtered.filter(t => t.type === 'INCOME').reduce((acc, t) => acc + Number(t.amount), 0);
+    const expense = filtered.filter(t => t.type === 'EXPENSE').reduce((acc, t) => acc + Number(t.amount), 0);
+    const balance = income - expense;
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push("/auth");
-  };
+    // 3. Preparar Dados do Gráfico de Área (Dia a Dia)
+    const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+    const dailyDataMap: any = {};
+    // Inicializa todos os dias com 0
+    for(let i=1; i<=daysInMonth; i++) dailyDataMap[i] = { day: i, income: 0, expense: 0 };
 
-  const handleSuccess = () => {
-    setIsModalOpen(false);
-    router.refresh(); 
-  };
+    filtered.forEach(t => {
+      const d = new Date(t.date);
+      const userDay = new Date(d.getTime() + d.getTimezoneOffset() * 60000).getDate();
+      if (dailyDataMap[userDay]) {
+        if (t.type === 'INCOME') dailyDataMap[userDay].income += t.amount;
+        else dailyDataMap[userDay].expense += t.amount;
+      }
+    });
+    const areaData = Object.values(dailyDataMap);
 
-  // --- LÓGICA DE ECONOMIA ---
-  const recommendedSavings = summary.income * 0.20; 
-  const currentSavings = summary.income - summary.expense;
-  const savingsRate = summary.income > 0 ? (currentSavings / summary.income) * 100 : 0;
-  
-  let feedbackMessage = "";
-  let feedbackColor = "";
-  let FeedbackIcon = Lightbulb;
-  let savingsPotential = 0;
+    // 4. Categorias: Realizado vs Planejado (Meta)
+    const catStats = categories
+      .filter(c => c.type === 'EXPENSE')
+      .map(cat => {
+        // Soma gastos desta categoria no mês selecionado
+        const spent = filtered
+          .filter(t => t.category_id === cat.id && t.type === 'EXPENSE')
+          .reduce((acc, t) => acc + t.amount, 0);
+        
+        const budget = Number(cat.budget) || 0;
+        const percent = budget > 0 ? (spent / budget) * 100 : 0;
 
-  if (summary.income === 0) {
-    feedbackMessage = "Que tal cadastrar sua primeira receita? Assim consigo te dar dicas legais de como ver seu dinheiro crescer! 🌱";
-    feedbackColor = "bg-slate-100 border-slate-200 text-slate-600";
-    FeedbackIcon = Lightbulb;
-  } else if (currentSavings < 0) {
-    feedbackMessage = `Opa, o sinal amarelo acendeu. Seus gastos passaram ${displayValue(Math.abs(currentSavings))} do que você ganhou. Vamos rever o que dá pra segurar esse mês?`;
-    feedbackColor = "bg-red-50 border-red-100 text-red-700";
-    FeedbackIcon = AlertTriangle;
-  } else if (currentSavings < recommendedSavings) {
-    savingsPotential = recommendedSavings - currentSavings;
-    feedbackMessage = `Você já guardou ${savingsRate.toFixed(0)}% do que ganhou, isso é ótimo! Se conseguir segurar mais ${displayValue(savingsPotential)}, você atinge a meta de ouro dos 20%. Bora tentar? 🚀`;
-    feedbackColor = "bg-amber-50 border-amber-100 text-amber-700";
-    FeedbackIcon = PiggyBank;
-  } else {
-    feedbackMessage = `Sensacional! Você está poupando ${savingsRate.toFixed(0)}% da sua renda. Com esse ritmo, seus sonhos estão cada vez mais perto de virar realidade. ✨`;
-    feedbackColor = "bg-emerald-50 border-emerald-100 text-emerald-700";
-    FeedbackIcon = CheckCircle2;
-  }
-  // ---------------------------------------
+        return { name: cat.name, spent, budget, percent };
+      })
+      // Mostra apenas categorias com movimento ou meta definida
+      .filter(c => c.spent > 0 || c.budget > 0)
+      .sort((a, b) => b.percent - a.percent); // Ordena pelos que mais consumiram a meta
+
+    // 5. Progresso Geral do Orçamento (Donut Chart)
+    const totalBudget = catStats.reduce((acc, c) => acc + c.budget, 0);
+    const totalSpent = catStats.reduce((acc, c) => acc + c.spent, 0);
+    const progress = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
+
+    return {
+      summary: { income, expense, balance },
+      areaChartData: areaData,
+      categoryStats: catStats,
+      budgetProgress: progress,
+      filteredTransactions: filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()) // Ordenar por data
+    };
+  }, [transactions, categories, selectedMonth, selectedYear]);
+
+  // --- AÇÕES ---
+  const handleLogout = async () => { await supabase.auth.signOut(); router.push("/auth"); };
+  const handleSuccess = () => { setIsModalOpen(false); router.refresh(); };
+  const formatMoney = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 font-sans flex-col md:flex-row">
       
+      {/* MOBILE NAV */}
       <MobileNav userEmail={userEmail} onLogout={handleLogout} />
 
       {/* SIDEBAR DESKTOP */}
       <aside className="w-72 bg-slate-900 hidden md:flex flex-col shadow-2xl z-10 relative shrink-0">
-        <div className="p-8">
-          <h1 className="text-3xl font-extrabold text-white flex items-center gap-3 tracking-tight">
-            <div className="bg-brand-600 p-2 rounded-lg shadow-lg shadow-brand-600/50">
-              <Wallet className="w-7 h-7 text-white" /> 
-            </div>
-            Flui
-          </h1>
-        </div>
+        <div className="p-8"><h1 className="text-3xl font-extrabold text-white flex items-center gap-3">Flui</h1></div>
         <nav className="flex-1 px-6 space-y-3 overflow-y-auto py-4 custom-scrollbar">
           <p className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Principal</p>
-          <a href="/" className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group bg-brand-600 text-white shadow-md shadow-brand-600/30">
-            <Wallet size={20} className="text-white" /> Dashboard
-          </a>
-          <a href="/incomes" className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group text-slate-400 hover:bg-slate-800 hover:text-white">
-            <TrendingUp size={20} /> Receitas
-          </a>
-          <a href="/expenses" className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group text-slate-400 hover:bg-slate-800 hover:text-white">
-            <TrendingDown size={20} /> Despesas
-          </a>
+          <a href="/" className="flex items-center gap-3 px-4 py-3 rounded-xl bg-brand-600 text-white shadow-md"><Wallet size={20} /> Dashboard</a>
+          <a href="/planning" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all"><Target size={20} /> Planejamento</a>
           
-          <p className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mt-8 mb-2">Gestão</p>
-          <a href="/investments" className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group text-slate-400 hover:bg-slate-800 hover:text-white">
-             <Briefcase size={20} /> Investimentos
-          </a>
-          <a href="/planning" className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group text-slate-400 hover:bg-slate-800 hover:text-white">
-            <Target size={20} /> Planejamento
-          </a>
-          <a href="/credit-cards" className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group text-slate-400 hover:bg-slate-800 hover:text-white">
-             <CreditCard size={20} /> Cartões
-          </a>
+          <p className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mt-6 mb-2">Gestão</p>
+          <a href="/investments" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all"><TrendingUp size={20} /> Investimentos</a>
+          <a href="/goals" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all"><PieIcon size={20} /> Metas</a>
+          <a href="/credit-cards" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all"><CreditCard size={20} /> Cartões</a>
         </nav>
-        
-        <div className="p-6 bg-slate-950/50 m-4 rounded-2xl border border-slate-800 flex flex-col items-center text-center">
-          <div className="w-12 h-12 bg-brand-900 rounded-full flex items-center justify-center text-brand-300 font-bold text-lg mb-3 shadow-md shadow-brand-900/50">
-              {userEmail?.charAt(0).toUpperCase()}
-          </div>
-          <div className="w-full overflow-hidden mb-4">
-             <p className="text-sm text-white font-medium truncate w-full" title={userEmail || ''}>{userEmail}</p>
-             <p className="text-xs text-slate-500 mt-0.5">Conta Gratuita</p>
-          </div>
-          <button onClick={handleLogout} className="flex items-center justify-center gap-2 px-4 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition-all w-full border border-slate-700 hover:border-slate-600 active:scale-95">
-             <ArrowRight size={16} /> <span>Sair da conta</span>
-          </button>
+        <div className="p-6 m-4 flex flex-col items-center text-center">
+          <p className="text-sm text-white mb-4 truncate w-full">{userEmail}</p>
+          <button onClick={handleLogout} className="flex items-center justify-center gap-2 px-4 py-2 text-sm text-slate-300 border border-slate-700 rounded-xl hover:bg-slate-800 w-full"><LogOut size={16} /> Sair</button>
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto relative z-0">
-        <header className="bg-white/80 backdrop-blur-md sticky top-0 z-20 border-b border-slate-200 px-8 py-5 flex justify-between items-center">
-          <div>
-            <h2 className="text-2xl font-extrabold text-slate-800 flex items-center gap-3">
-              Olá, {userName}! <span className="text-2xl">🌿</span>
-              
-              {/* 3. BOTÃO DE TOGGLE VISIBILIDADE */}
-              <button 
-                onClick={() => setAreValuesVisible(!areValuesVisible)}
-                className="ml-2 p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-brand-600 transition-colors"
-                title={areValuesVisible ? "Ocultar valores" : "Mostrar valores"}
-              >
-                {areValuesVisible ? <Eye size={20} /> : <EyeOff size={20} />}
-              </button>
-
-            </h2>
-            <p className="text-slate-500 text-sm hidden md:block mt-1">
-              Tudo pronto. Vamos fazer seu dinheiro fluir hoje?
-            </p>
-          </div>
-          <button onClick={() => setIsModalOpen(true)} className="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-full flex items-center gap-2 font-semibold transition-all shadow-lg shadow-brand-600/30 hover:scale-105 active:scale-95">
-            <Plus size={20} /> <span className="hidden md:inline">Nova Transação</span>
-          </button>
-        </header>
-
-        <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
-          
-          <div className="space-y-6">
-            <SmartAlertsWidget balance={summary.total} transactions={transactions} cards={cards} />
-            <OnboardingWidget hasTransactions={hasAnyTransaction} hasInvestments={hasAnyInvestment} onOpenTransactionModal={() => setIsModalOpen(true)} />
-            
-            {hasAnyTransaction && summary.income > 0 && (
-              <div className={`p-5 rounded-2xl border flex items-start gap-4 shadow-sm ${feedbackColor}`}>
-                <div className="p-2 bg-white/50 rounded-xl shrink-0">
-                   <FeedbackIcon size={24} />
-                </div>
-                <div>
-                   <h3 className="font-bold text-lg mb-1">Análise de Economia</h3>
-                   <p className="text-sm font-medium opacity-90 leading-relaxed">
-                     {feedbackMessage}
-                   </p>
-                   {savingsPotential > 0 && (
-                     <p className="text-xs font-bold mt-2 uppercase tracking-wide opacity-80">
-                        {/* Usei o displayValue aqui também */}
-                        Potencial de economia extra: {displayValue(savingsPotential)}
-                     </p>
-                   )}
-                </div>
+      <main className="flex-1 overflow-y-auto relative z-0 p-4 md:p-8">
+        
+        {/* --- HEADER: Filtros e Totais --- */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+           
+           {/* Seletor de Data e Título */}
+           <div className="flex items-center gap-4">
+              <h2 className="text-2xl font-extrabold text-slate-800 hidden md:block">Balanço Mensal</h2>
+              <div className="flex bg-white rounded-lg shadow-sm border border-slate-200 p-1">
+                 <select 
+                   value={selectedMonth} 
+                   onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                   className="bg-transparent text-sm font-bold text-slate-600 outline-none px-2 py-1 cursor-pointer"
+                 >
+                    {MONTH_NAMES.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                 </select>
+                 <select 
+                   value={selectedYear} 
+                   onChange={(e) => setSelectedYear(Number(e.target.value))}
+                   className="bg-transparent text-sm font-bold text-slate-600 outline-none px-2 py-1 border-l border-slate-200 cursor-pointer"
+                 >
+                    <option value={2025}>2025</option>
+                    <option value={2026}>2026</option>
+                 </select>
               </div>
-            )}
-          </div>
+           </div>
 
-          {/* CARDS DE RESUMO COM VALORES PROTEGIDOS */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-200/60 border-0 relative overflow-hidden transition-transform hover:-translate-y-1">
-              <div className="absolute top-0 right-0 -mr-12 -mt-12 w-32 h-32 bg-brand-50 rounded-full blur-3xl opacity-70"></div>
-              <div className="flex justify-between items-start relative">
-                <div>
-                  <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Saldo Total</p>
-                  <h3 className={`text-3xl font-extrabold mt-3 ${summary.total >= 0 ? 'text-slate-900' : 'text-red-600'}`}>
-                    {displayValue(summary.total)}
-                  </h3>
-                </div>
-                <div className="p-3 bg-brand-100 text-brand-600 rounded-2xl shadow-sm"><Wallet size={28} /></div>
+           {/* KPIs (Indicadores) */}
+           <div className="flex gap-6 w-full md:w-auto overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
+              <div className="flex items-center gap-3 shrink-0">
+                 <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600"><TrendingUp size={20}/></div>
+                 <div><p className="text-[10px] uppercase font-bold text-slate-400">Receitas</p><p className="text-lg font-bold text-emerald-600">{formatMoney(summary.income)}</p></div>
               </div>
-            </div>
-            
-            <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-200/60 border-0 relative overflow-hidden transition-transform hover:-translate-y-1">
-              <div className="absolute top-0 right-0 -mr-12 -mt-12 w-32 h-32 bg-purple-50 rounded-full blur-3xl opacity-70"></div>
-              <div className="flex justify-between items-start relative">
-                <div>
-                  <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Investido</p>
-                  <h3 className="text-3xl font-extrabold mt-3 text-purple-900">
-                    {displayValue(totalInvested)}
-                  </h3>
-                </div>
-                <div className="p-3 bg-purple-100 text-purple-600 rounded-2xl shadow-sm"><Briefcase size={28} /></div>
+              <div className="flex items-center gap-3 shrink-0">
+                 <div className="p-2 bg-rose-100 rounded-lg text-rose-600"><TrendingDown size={20}/></div>
+                 <div><p className="text-[10px] uppercase font-bold text-slate-400">Despesas</p><p className="text-lg font-bold text-rose-600">{formatMoney(summary.expense)}</p></div>
               </div>
-            </div>
-
-            <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-200/60 border-0 transition-transform hover:-translate-y-1">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1">Entradas <span className="text-[10px] bg-green-100 text-green-700 px-1.5 rounded font-bold">MÊS</span></p>
-                  <h3 className="text-3xl font-extrabold text-emerald-600 mt-3">
-                    {displayValue(summary.income)}
-                  </h3>
-                </div>
-                <div className="p-3 bg-emerald-100 text-emerald-600 rounded-2xl shadow-sm"><ArrowUpRight size={28} /></div>
+              <div className="flex items-center gap-3 shrink-0">
+                 <div className="p-2 bg-brand-100 rounded-lg text-brand-600"><Wallet size={20}/></div>
+                 <div><p className="text-[10px] uppercase font-bold text-slate-400">Saldo</p><p className={`text-lg font-bold ${summary.balance >= 0 ? 'text-brand-600' : 'text-rose-600'}`}>{formatMoney(summary.balance)}</p></div>
               </div>
-            </div>
+           </div>
 
-            <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-200/60 border-0 transition-transform hover:-translate-y-1">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1">Saídas <span className="text-[10px] bg-red-100 text-red-700 px-1.5 rounded font-bold">MÊS</span></p>
-                  <h3 className="text-3xl font-extrabold text-rose-600 mt-3">
-                    {displayValue(summary.expense)}
-                  </h3>
-                </div>
-                <div className="p-3 bg-rose-100 text-rose-600 rounded-2xl shadow-sm"><TrendingDown size={28} /></div>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-            <div className="lg:col-span-2 flex flex-col gap-8">
-               <InsightsWidget transactions={transactions} />
-               
-               {/* SEÇÃO DE CARTÕES (PROTEGIDA) */}
-               {cards.length > 0 && (
-                <div className="bg-transparent">
-                  <div className="flex items-center justify-between mb-4 px-1">
-                    <h3 className="text-xl font-bold text-slate-800">Meus Cartões</h3>
-                    <a href="/credit-cards" className="text-sm font-medium text-brand-600 hover:text-brand-700 flex items-center gap-1">Ver todos <ArrowUpRight size={14}/></a>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    {cards.slice(0, 2).map((card: any) => {
-                      const usage = card.limit_amount > 0 ? (card.current_invoice / card.limit_amount) * 100 : 0;
-                      return (
-                        <div key={card.id} className="bg-white p-5 rounded-2xl shadow-lg shadow-slate-200/50 border-0 relative overflow-hidden hover:shadow-xl transition-shadow min-h-[11rem] flex flex-col justify-between">
-                          <div className="absolute top-0 left-0 w-1.5 h-full" style={{ backgroundColor: card.color }}></div>
-                          <div className="pl-4 w-full">
-                            <div className="flex justify-between items-start mb-2">
-                                <span className="font-bold text-lg text-slate-700 truncate">{card.name}</span>
-                                <CreditCard size={20} className="text-slate-400 shrink-0"/>
-                            </div>
-                            <div>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fatura Atual</p>
-                                <p className="text-2xl font-extrabold text-slate-900">
-                                  {displayValue(card.current_invoice)}
-                                </p>
-                            </div>
-                          </div>
-                          
-                          {/* Barra de Progresso */}
-                          <div className="pl-4 w-full flex items-center gap-3 mb-2">
-                              <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                                  <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(usage, 100)}%`, backgroundColor: card.color }}></div>
-                              </div>
-                              <p className="text-[10px] font-bold text-slate-500 whitespace-nowrap">{usage.toFixed(0)}% uso</p>
-                          </div>
-
-                          <div className="pl-4 w-full flex justify-end mt-1">
-                            <PayInvoiceButton 
-                                cardId={card.id} 
-                                invoiceAmount={card.current_invoice} 
-                                userId={userId} 
-                            />
-                          </div>
-
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-            <div className="lg:col-span-1">
-                <ExpenseChart transactions={transactions} />
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/60 border-0 overflow-hidden">
-              <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                  <h3 className="font-bold text-xl text-slate-800">Transações Recentes</h3>
-                  <a href="/expenses" className="text-sm font-medium text-brand-600 hover:text-brand-700">Ver tudo</a>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[600px]">
-                  <thead>
-                    <tr className="bg-slate-50/50 text-slate-500 text-xs uppercase tracking-wider font-semibold">
-                      <th className="p-5">Descrição</th>
-                      <th className="p-5">Categoria</th>
-                      <th className="p-5">Data</th>
-                      <th className="p-5 text-right">Valor</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {transactions.slice(0, 5).map((t: any) => (
-                      <tr key={t.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="p-5"><p className="text-slate-900 font-bold">{t.description}</p></td>
-                        <td className="p-5"><span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider">{t.categories?.name || "Geral"}</span></td>
-                        <td className="p-5 text-slate-500 text-sm font-medium">{new Date(t.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</td>
-                        <td className={`p-5 text-right font-extrabold ${t.type === 'INCOME' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                          {t.type === 'INCOME' ? '+' : '-'} {displayValue(t.amount)}
-                        </td>
-                      </tr>
-                    ))}
-                    {transactions.length === 0 && <tr><td colSpan={4} className="p-12 text-center text-slate-500">Nenhuma transação encontrada.</td></tr>}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+           <button onClick={() => setIsModalOpen(true)} className="hidden md:flex bg-slate-900 text-white p-3 rounded-xl hover:bg-slate-800 transition-all shadow-lg hover:shadow-xl active:scale-95">
+              <Plus size={20}/>
+           </button>
         </div>
+
+        {/* --- GRID PRINCIPAL --- */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 mb-6">
+           
+           {/* GRÁFICO DE ÁREA (Evolução Diária) - Ocupa 2 colunas no desktop */}
+           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 xl:col-span-2 flex flex-col min-h-[350px]">
+              <div className="flex justify-between items-center mb-6">
+                 <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Evolução Diária</h3>
+                 <div className="flex gap-3 text-xs font-bold">
+                    <span className="flex items-center gap-1 text-emerald-600"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> Entradas</span>
+                    <span className="flex items-center gap-1 text-rose-600"><div className="w-2 h-2 rounded-full bg-rose-500"></div> Saídas</span>
+                 </div>
+              </div>
+              <div className="flex-1 w-full">
+                 <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={areaChartData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
+                       <defs>
+                          <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
+                             <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
+                             <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                          </linearGradient>
+                          <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
+                             <stop offset="5%" stopColor="#e11d48" stopOpacity={0.1}/>
+                             <stop offset="95%" stopColor="#e11d48" stopOpacity={0}/>
+                          </linearGradient>
+                       </defs>
+                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                       <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} />
+                       <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} tickFormatter={(v) => `R$${v}`} />
+                       <Tooltip contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}} />
+                       <Area type="monotone" dataKey="income" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorIncome)" />
+                       <Area type="monotone" dataKey="expense" stroke="#e11d48" strokeWidth={3} fillOpacity={1} fill="url(#colorExpense)" />
+                    </AreaChart>
+                 </ResponsiveContainer>
+              </div>
+           </div>
+
+           {/* PAINEL LATERAL: METAS vs REALIZADO */}
+           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
+              <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-6">Orçamento do Mês</h3>
+              
+              <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-5 max-h-[300px] xl:max-h-none">
+                 {categoryStats.length === 0 ? (
+                    <div className="text-center text-slate-400 py-10 text-sm">
+                       <p>Nenhum gasto ou meta definida.</p>
+                       <a href="/planning" className="text-brand-600 hover:underline">Configurar no Planejamento</a>
+                    </div>
+                 ) : categoryStats.map((cat, idx) => (
+                    <div key={idx}>
+                       <div className="flex justify-between text-xs font-bold mb-1.5">
+                          <span className="text-slate-700 truncate max-w-[120px]">{cat.name}</span>
+                          <div className="flex gap-2">
+                             <span className={`${cat.percent > 100 ? 'text-rose-600' : 'text-slate-500'}`}>{cat.percent.toFixed(0)}%</span>
+                             <span className="text-slate-800">{formatMoney(cat.spent)}</span>
+                          </div>
+                       </div>
+                       <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-500 ${cat.percent > 100 ? 'bg-rose-500' : 'bg-brand-500'}`} 
+                            style={{ width: `${Math.min(cat.percent, 100)}%` }}
+                          ></div>
+                       </div>
+                    </div>
+                 ))}
+              </div>
+
+              {/* Gráfico Donut Resumo */}
+              <div className="mt-6 pt-6 border-t border-slate-100 flex items-center justify-between">
+                 <div>
+                    <p className="text-xs text-slate-400 font-bold uppercase">Uso Geral</p>
+                    <p className="text-2xl font-extrabold text-brand-600">{budgetProgress.toFixed(0)}%</p>
+                    <p className="text-[10px] text-slate-400">do orçamento planejado</p>
+                 </div>
+                 <div className="w-16 h-16 relative">
+                    <ResponsiveContainer>
+                       <PieChart>
+                          <Pie data={[{value: budgetProgress}, {value: Math.max(0, 100-budgetProgress)}]} dataKey="value" innerRadius={20} outerRadius={30} startAngle={90} endAngle={-270}>
+                             <Cell fill={budgetProgress > 100 ? '#e11d48' : '#4f46e5'} />
+                             <Cell fill="#f1f5f9" />
+                          </Pie>
+                       </PieChart>
+                    </ResponsiveContainer>
+                 </div>
+              </div>
+           </div>
+        </div>
+
+        {/* --- RODAPÉ: GRÁFICO E LISTA RECENTE --- */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+           
+           {/* Top Categorias (Gráfico de Barras) */}
+           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 min-h-[300px] flex flex-col">
+              <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-6">Top Categorias (Gastos)</h3>
+              <div className="flex-1 w-full">
+                 <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={categoryStats.slice(0, 7)} barSize={30}>
+                       <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#64748b'}} interval={0} />
+                       <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '8px', border: 'none'}} />
+                       <Bar dataKey="spent" radius={[4, 4, 0, 0]}>
+                          {categoryStats.map((entry, index) => (
+                             <Cell key={`cell-${index}`} fill={index === 0 ? '#f97316' : '#fb923c'} /> 
+                          ))}
+                       </Bar>
+                    </BarChart>
+                 </ResponsiveContainer>
+              </div>
+           </div>
+
+           {/* Lista de Transações Recentes do Mês */}
+           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
+              <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-6">Últimas Movimentações</h3>
+              <div className="flex-1 space-y-4 overflow-y-auto max-h-[300px] pr-2 custom-scrollbar">
+                 {filteredTransactions.length === 0 ? (
+                    <p className="text-center text-slate-400 text-sm mt-10">Nenhuma movimentação neste mês.</p>
+                 ) : filteredTransactions.slice(0, 10).map((t: any) => (
+                    <div key={t.id} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-xl transition-colors">
+                       <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-full ${t.type === 'INCOME' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
+                             {t.type === 'INCOME' ? <TrendingUp size={16}/> : <TrendingDown size={16}/>}
+                          </div>
+                          <div>
+                             <p className="text-sm font-bold text-slate-800">{t.description}</p>
+                             <p className="text-[10px] text-slate-500 font-bold uppercase">{t.categories?.name || "Geral"} • {new Date(t.date).toLocaleDateString('pt-BR')}</p>
+                          </div>
+                       </div>
+                       <span className={`text-sm font-bold ${t.type === 'INCOME' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {t.type === 'INCOME' ? '+' : '-'} {formatMoney(t.amount)}
+                       </span>
+                    </div>
+                 ))}
+              </div>
+           </div>
+
+        </div>
+
       </main>
 
+      {/* BOTÃO FLUTUANTE (Mobile) */}
+      <button onClick={() => setIsModalOpen(true)} className="md:hidden fixed bottom-6 right-6 bg-brand-600 text-white p-4 rounded-full shadow-2xl z-50 hover:scale-105 transition-transform">
+         <Plus size={24}/>
+      </button>
+
+      {/* MODAL */}
       <NewTransactionModal 
         isOpen={isModalOpen} 
         onClose={handleSuccess} 
         userId={userId} 
+        onSuccess={handleSuccess} 
       />
-      <WhatsNewModal />
     </div>
   );
 }
 
+// --- SUBCOMPONENTE MOBILE NAV ---
 function MobileNav({ userEmail, onLogout }: { userEmail: string | null, onLogout: () => void }) {
   const [isOpen, setIsOpen] = useState(false);
-
   return (
     <div className="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center shadow-lg sticky top-0 z-50">
       <div className="flex items-center gap-2">
-        <div className="bg-brand-500 p-1.5 rounded-lg">
-           <Wallet className="text-white w-5 h-5" />
-        </div>
+        <div className="bg-brand-500 p-1.5 rounded-lg"><Wallet className="text-white w-5 h-5" /></div>
         <span className="font-bold text-lg tracking-tight">Flui</span>
       </div>
-
       <button onClick={() => setIsOpen(!isOpen)} className="p-2 hover:bg-slate-800 rounded-lg transition-colors">
         {isOpen ? <X size={24} /> : <Menu size={24} />}
       </button>
-
-      {/* Menu Dropdown */}
       {isOpen && (
         <div className="absolute top-full left-0 right-0 bg-slate-900 border-t border-slate-800 shadow-2xl animate-in slide-in-from-top-2">
           <div className="p-4 space-y-4">
-            
             <div className="px-4 py-3 bg-slate-800/50 rounded-xl border border-slate-700">
                <p className="text-xs text-slate-400 uppercase font-bold mb-1">Logado como</p>
                <p className="text-sm font-medium truncate text-white">{userEmail}</p>
             </div>
-
             <nav className="flex flex-col gap-2">
-               <a href="/" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-all">
-                 <Briefcase size={18} /> Visão Geral
-               </a>
-               <a href="/planning" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800 hover:text-white transition-all">
-                 <Target size={18} /> Planejamento
-               </a>
+               <a href="/" className="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-800 text-white"><Wallet size={18} /> Dashboard</a>
+               <a href="/planning" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800"><Target size={18} /> Planejamento</a>
+               <a href="/goals" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800"><PieIcon size={18} /> Metas</a>
             </nav>
-
             <div className="h-px bg-slate-800 my-2"></div>
-
-            <button 
-              onClick={onLogout}
-              className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-xl transition-all font-medium"
-            >
-              <LogOut size={18} /> Sair do Sistema
-            </button>
+            <button onClick={onLogout} className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-500/10 rounded-xl"><LogOut size={18} /> Sair</button>
           </div>
         </div>
       )}
