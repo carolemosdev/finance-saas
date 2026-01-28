@@ -74,16 +74,19 @@ export default async function Home() {
 
   // --- 4. Renderização ---
   // Removemos o cálculo de resumo fixo daqui, pois a View vai calcular dinamicamente baseada no filtro de Mês
-  return (
+return (
     <DashboardView 
-      initialTransactions={transactions}
-      categories={categories} // Passando categorias
+      transactions={transactions} // <--- MUDANÇA AQUI: Era initialTransactions, mudei para transactions
+      categories={categories}
       cards={cards}
       assets={assets}
       goals={goals}
       userEmail={user.email || ""}
       userId={user.id}
       totalInvested={totalInvested}
+      // Se seu componente DashboardView pedir estas props opcionais, mantenha:
+      hasAnyTransaction={hasAnyTransaction} 
+      hasAnyInvestment={hasAnyInvestment}
     />
   );
 }
