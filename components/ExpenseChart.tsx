@@ -78,7 +78,8 @@ export function ExpenseChart({ transactions }: ExpenseChartProps) {
                 ))}
               </Pie>
               <Tooltip 
-                formatter={(value: number) => formatMoney(value)}
+                // CORREÇÃO: Usar 'any' ou 'number | string | Array<...>' para satisfazer o TypeScript
+                formatter={(value: any) => formatMoney(Number(value))}
                 contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}}
               />
             </PieChart>
