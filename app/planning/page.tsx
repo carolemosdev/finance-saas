@@ -4,11 +4,10 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { 
-  Wallet, Briefcase, Target, CreditCard, LogOut, 
-  Eye, EyeOff, ChevronDown, ChevronRight,
-  TrendingUp, Calendar, AlertCircle, Plus
+  Eye, EyeOff, AlertCircle
 } from "lucide-react";
 import { MobileNav } from "../../components/MobileNav"; 
+import { Sidebar } from "../../components/Sidebar"; // <--- Sidebar Padrão
 import { toast } from "sonner"; 
 
 // --- CONFIGURAÇÃO ---
@@ -25,7 +24,7 @@ type PlanningItem = {
   id: string | number;
   name: string;
   planned: number;     
-  isFixed?: boolean; // Opcional para evitar erros se não vier do banco
+  isFixed?: boolean; 
   realized: MonthlyValue; 
 };
 
@@ -37,35 +36,10 @@ type ExpenseCategory = {
   subcategories: PlanningItem[];
 };
 
-// --- SIDEBAR ---
-function Sidebar({ userEmail, onLogout }: any) {
-  return (
-    <aside className="w-72 bg-slate-900 hidden md:flex flex-col shadow-2xl z-10 relative shrink-0">
-      <div className="p-8"><h1 className="text-3xl font-extrabold text-white flex items-center gap-3">Flui</h1></div>
-      <nav className="flex-1 px-6 space-y-3 overflow-y-auto py-4 custom-scrollbar">
-        <p className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Principal</p>
-        <a href="/" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all"><Wallet size={20} /> Dashboard</a>
-        <a href="/planning" className="flex items-center gap-3 px-4 py-3 rounded-xl bg-brand-600 text-white shadow-md"><Target size={20} /> Planejamento</a>
-        
-        <p className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mt-6 mb-2">Gestão</p>
-        <a href="/investments" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all"><Briefcase size={20} /> Investimentos</a>
-        <a href="/goals" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all"><Target size={20} /> Metas</a>
-        <a href="/credit-cards" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all"><CreditCard size={20} /> Cartões</a>
-      </nav>
-      <div className="p-6 m-4 flex flex-col items-center text-center">
-        <p className="text-sm text-white mb-4 truncate w-full">{userEmail}</p>
-        <button onClick={onLogout} className="flex items-center justify-center gap-2 px-4 py-2 text-sm text-slate-300 border border-slate-700 rounded-xl hover:bg-slate-800 w-full"><LogOut size={16} /> Sair</button>
-      </div>
-    </aside>
-  );
-}
-
-// --- PÁGINA PRINCIPAL ---
 export default function PlanningPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [areValuesVisible, setAreValuesVisible] = useState(true);
-  const [expandedCategories, setExpandedCategories] = useState<string[]>([]);
   
   const [incomes, setIncomes] = useState<PlanningItem[]>([]);
   const [expenses, setExpenses] = useState<ExpenseCategory[]>([]);
@@ -117,7 +91,7 @@ export default function PlanningPage() {
       subcategories: [] 
     }));
 
-    // B. Mapeia CATEGORIAS DE RECEITA (NOVO: Agora dinâmico igual despesas)
+    // B. Mapeia CATEGORIAS DE RECEITA
     const incomesMap: PlanningItem[] = categoriesDb.filter(c => c.type === 'INCOME').map(c => ({
       id: c.id,
       name: c.name,
@@ -140,7 +114,6 @@ export default function PlanningPage() {
           cat.realized[monthKey] = (cat.realized[monthKey] || 0) + Number(t.amount);
         }
       } else if (t.type === 'INCOME') {
-        // Agora busca a categoria específica de receita
         const cat = incomesMap.find(c => c.id === t.category_id);
         if (cat) {
           cat.realized[monthKey] = (cat.realized[monthKey] || 0) + Number(t.amount);
@@ -149,7 +122,6 @@ export default function PlanningPage() {
     });
 
     // D. O FILTRO MATADOR: Remove categorias "fantasmas"
-    // Função auxiliar para verificar se a categoria deve aparecer
     const shouldShow = (cat: any) => {
         const totalRealized = Object.values(cat.realized as MonthlyValue).reduce((acc, val) => acc + val, 0);
         return totalRealized > 0 || cat.planned > 0;
@@ -184,14 +156,13 @@ export default function PlanningPage() {
       const value = parseFloat(val) || 0;
       if (typeof id === 'number' || !isNaN(Number(id))) {
         await supabase.from('categories').update({ budget: value }).eq('id', id);
-        if (value > 0) loadData(); // Recarrega se definiu meta, para garantir que apareça
+        if (value > 0) loadData(); 
       }
   };
 
   const formatMoney = (val: number) => !areValuesVisible ? "••••••" : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   const formatPercent = (val: number, total: number) => total === 0 ? "0%" : `${((val / total) * 100).toFixed(0)}%`;
   const handleLogout = async () => { await supabase.auth.signOut(); router.push("/auth"); };
-  const toggleCategory = (id: string) => setExpandedCategories(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
 
   const currentMonthKey = visibleMonths[0]; 
   const currentBalance = getMonthlyBalance(currentMonthKey);
@@ -199,6 +170,8 @@ export default function PlanningPage() {
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 font-sans flex-col md:flex-row">
       <MobileNav userEmail={userEmail} onLogout={handleLogout} />
+      
+      {/* Sidebar Padrão */}
       <Sidebar userEmail={userEmail} onLogout={handleLogout} />
 
       <main className="flex-1 overflow-y-auto relative z-0">
@@ -213,12 +186,12 @@ export default function PlanningPage() {
           </div>
           
           <div className="flex items-center gap-4">
-             <div className="text-right">
+              <div className="text-right">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Saldo ({MONTH_LABELS[currentMonthKey]})</p>
                 <p className={`text-2xl font-extrabold ${currentBalance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                    {formatMoney(currentBalance)}
                 </p>
-             </div>
+              </div>
           </div>
         </header>
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Loader2, Briefcase, Building2, Bitcoin, TrendingUp, DollarSign, Hash } from "lucide-react";
+import { X, Loader2, DollarSign, Hash } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import CurrencyInput from 'react-currency-input-field';
 import { toast } from "sonner";

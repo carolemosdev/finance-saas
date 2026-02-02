@@ -32,16 +32,28 @@ export function NewCreditCardModal({ isOpen, onClose, userId, onSuccess, cardToE
       setBrand(cardToEdit.brand);
       setColor(cardToEdit.color || "#3b82f6");
     } else {
+      // Resetar form se for novo
       setName(""); setLimit(undefined); setClosingDay(1); setDueDay(10); setBrand("MASTERCARD"); setColor("#3b82f6");
     }
   }, [isOpen, cardToEdit]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userId || !limit) return;
+    if (!userId || !limit) {
+        toast.warning("Preencha o limite do cartão.");
+        return;
+    }
     setIsLoading(true);
 
-    const payload = { user_id: userId, name, limit_amount: limit, closing_day: closingDay, due_day: dueDay, brand, color };
+    const payload = { 
+        user_id: userId, 
+        name, 
+        limit_amount: limit, 
+        closing_day: closingDay, 
+        due_day: dueDay, 
+        brand, 
+        color 
+    };
     
     let error;
     if (cardToEdit) {
@@ -55,7 +67,7 @@ export function NewCreditCardModal({ isOpen, onClose, userId, onSuccess, cardToE
     if (error) {
       toast.error("Erro ao salvar cartão.");
     } else {
-      toast.success("Cartão salvo com sucesso!");
+      toast.success(cardToEdit ? "Cartão atualizado!" : "Cartão criado com sucesso!");
       onSuccess();
       onClose();
     }
@@ -67,52 +79,93 @@ export function NewCreditCardModal({ isOpen, onClose, userId, onSuccess, cardToE
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-          <h2 className="text-xl font-bold text-slate-800">{cardToEdit ? "Editar Cartão" : "Novo Cartão"}</h2>
-          <button onClick={onClose}><X size={20} className="text-slate-500" /></button>
+        
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+          <div className="flex items-center gap-2 text-slate-800">
+             <div className="p-2 bg-white rounded-lg shadow-sm border border-slate-100">
+                <CreditCard size={20} className="text-brand-600" />
+             </div>
+             <h2 className="text-xl font-bold">{cardToEdit ? "Editar Cartão" : "Novo Cartão"}</h2>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-200 text-slate-400 transition-colors">
+             <X size={20} />
+          </button>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
           
-          <div className="space-y-1">
-             <label className="text-xs font-bold text-slate-500 uppercase ml-1">Apelido do Cartão</label>
-             <input type="text" required placeholder="Ex: Nubank, Inter..." className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-brand-500 outline-none font-medium" value={name} onChange={e => setName(e.target.value)} />
+          <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Apelido do Cartão</label>
+              <input 
+                type="text" 
+                required 
+                placeholder="Ex: Nubank, Inter..." 
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none font-medium text-slate-700 transition-all placeholder:text-slate-400" 
+                value={name} 
+                onChange={e => setName(e.target.value)} 
+              />
           </div>
 
-          <div className="space-y-1">
-             <label className="text-xs font-bold text-slate-500 uppercase ml-1">Limite do Cartão</label>
-             <CurrencyInput
+          <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Limite do Cartão</label>
+              <CurrencyInput
                   placeholder="R$ 0,00"
                   decimalsLimit={2}
                   decimalScale={2}
                   intlConfig={{ locale: 'pt-BR', currency: 'BRL' }}
                   onValueChange={(value) => setLimit(value ? Number(value.replace(",", ".")) : undefined)}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-brand-500 outline-none font-bold text-lg"
-                  defaultValue={limit}
-             />
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none font-bold text-lg text-slate-800 transition-all"
+                  value={limit} // Mudei de defaultValue para value para controle correto no Edit
+              />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-               <label className="text-xs font-bold text-slate-500 uppercase ml-1">Dia Fechamento</label>
-               <input type="number" min="1" max="31" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-brand-500 outline-none font-medium" value={closingDay} onChange={e => setClosingDay(Number(e.target.value))} />
+            <div className="space-y-1.5">
+               <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1 flex items-center gap-1"><Calendar size={12}/> Fechamento</label>
+               <input 
+                 type="number" 
+                 min="1" max="31" 
+                 required 
+                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none font-medium text-center text-slate-700" 
+                 value={closingDay} 
+                 onChange={e => setClosingDay(Number(e.target.value))} 
+               />
             </div>
-            <div className="space-y-1">
-               <label className="text-xs font-bold text-slate-500 uppercase ml-1">Dia Vencimento</label>
-               <input type="number" min="1" max="31" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-brand-500 outline-none font-medium" value={dueDay} onChange={e => setDueDay(Number(e.target.value))} />
+            <div className="space-y-1.5">
+               <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1 flex items-center gap-1"><Calendar size={12}/> Vencimento</label>
+               <input 
+                 type="number" 
+                 min="1" max="31" 
+                 required 
+                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none font-medium text-center text-slate-700" 
+                 value={dueDay} 
+                 onChange={e => setDueDay(Number(e.target.value))} 
+               />
             </div>
           </div>
 
-          <div className="space-y-1">
-             <label className="text-xs font-bold text-slate-500 uppercase ml-1">Cor do Cartão</label>
-             <div className="flex gap-3 overflow-x-auto pb-2">
-                {['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#000000', '#ec4899'].map(c => (
-                  <button key={c} type="button" onClick={() => setColor(c)} className={`w-8 h-8 rounded-full border-2 transition-all ${color === c ? 'border-slate-800 scale-110' : 'border-transparent'}`} style={{ backgroundColor: c }} />
+          <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Cor do Cartão</label>
+              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+                {['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#0f172a', '#ec4899'].map(c => (
+                  <button 
+                    key={c} 
+                    type="button" 
+                    onClick={() => setColor(c)} 
+                    className={`w-9 h-9 rounded-full border-[3px] transition-all hover:scale-110 ${color === c ? 'border-slate-300 scale-110 shadow-md' : 'border-transparent'}`} 
+                    style={{ backgroundColor: c }} 
+                  />
                 ))}
-             </div>
+              </div>
           </div>
 
-          <button type="submit" disabled={isLoading} className="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3.5 rounded-xl shadow-lg mt-2 flex justify-center items-center gap-2">
-            {isLoading ? <Loader2 className="animate-spin" /> : "Salvar Cartão"}
+          <button 
+            type="submit" 
+            disabled={isLoading} 
+            className="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-brand-600/30 mt-4 flex justify-center items-center gap-2 transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
+          >
+            {isLoading ? <Loader2 className="animate-spin" /> : (cardToEdit ? "Salvar Alterações" : "Criar Cartão")}
           </button>
         </form>
       </div>

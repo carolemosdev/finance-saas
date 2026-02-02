@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { Wallet, Loader2, ArrowRight, Mail, Lock, CheckCircle2, Eye, EyeOff, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
-// 1. IMPORTAÇÃO DO BOTÃO GOOGLE
-import { GoogleLoginButton } from "../../components/GoogleLoginButton";
+import { GoogleLoginButton } from "../../components/GoogleLoginButton"; // Componente novo
 
 export default function AuthPage() {
   const router = useRouter();
@@ -38,7 +37,7 @@ export default function AuthPage() {
     e.preventDefault();
     setIsLoading(true);
 
-    if (password.length < 6) {
+    if (!isLogin && password.length < 6) {
       toast.warning("A senha precisa ter pelo menos 6 caracteres.");
       setIsLoading(false);
       return;
@@ -93,7 +92,6 @@ export default function AuthPage() {
         {/* FORMULÁRIO */}
         <div className="p-8 pt-6">
           
-          {/* 2. BOTÃO DO GOOGLE E DIVISOR */}
           <GoogleLoginButton />
           
           <div className="relative my-6">

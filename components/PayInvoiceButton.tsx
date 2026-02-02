@@ -51,8 +51,8 @@ export function PayInvoiceButton({ cardId, invoiceAmount, userId }: PayInvoiceBu
 
   if (invoiceAmount <= 0) {
     return (
-      <button disabled className="text-xs font-bold text-slate-400 flex items-center gap-1 bg-slate-100 px-3 py-2 rounded-lg cursor-not-allowed opacity-70">
-        <Check size={14} /> Fatura Paga
+      <button disabled className="text-xs font-bold text-emerald-600 flex items-center gap-1.5 bg-emerald-50 border border-emerald-100 px-3 py-2 rounded-lg cursor-not-allowed opacity-80">
+        <Check size={14} className="stroke-[3]" /> Fatura em Dia
       </button>
     );
   }
@@ -61,7 +61,7 @@ export function PayInvoiceButton({ cardId, invoiceAmount, userId }: PayInvoiceBu
     <button 
       onClick={handlePay} 
       disabled={isLoading}
-      className="text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm transition-all active:scale-95"
+      className="text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 px-4 py-2 rounded-lg flex items-center gap-2 shadow-md transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
     >
       {isLoading ? <Loader2 size={14} className="animate-spin" /> : <CreditCard size={14} />}
       Pagar Fatura

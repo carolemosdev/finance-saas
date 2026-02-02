@@ -9,6 +9,8 @@ import {
 } from "lucide-react";
 // Certifique-se que o caminho desses imports está correto no seu projeto
 import { NewTransactionModal } from "./NewTransactionModal"; 
+import { Sidebar } from "./Sidebar"; // <--- Importando a Sidebar Padrão
+import { MobileNav } from "./MobileNav"; // <--- Importando a MobileNav Padrão
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   BarChart, Bar, Cell, PieChart, Pie
@@ -117,27 +119,11 @@ export function DashboardView({
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 font-sans flex-col md:flex-row">
       
-      {/* MOBILE NAV */}
+      {/* MOBILE NAV PADRONIZADA */}
       <MobileNav userEmail={userEmail} onLogout={handleLogout} />
 
-      {/* SIDEBAR DESKTOP */}
-      <aside className="w-72 bg-slate-900 hidden md:flex flex-col shadow-2xl z-10 relative shrink-0">
-        <div className="p-8"><h1 className="text-3xl font-extrabold text-white flex items-center gap-3">Flui</h1></div>
-        <nav className="flex-1 px-6 space-y-3 overflow-y-auto py-4 custom-scrollbar">
-          <p className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Principal</p>
-          <a href="/" className="flex items-center gap-3 px-4 py-3 rounded-xl bg-brand-600 text-white shadow-md"><Wallet size={20} /> Dashboard</a>
-          <a href="/planning" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all"><Target size={20} /> Planejamento</a>
-          
-          <p className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mt-6 mb-2">Gestão</p>
-          <a href="/investments" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all"><TrendingUp size={20} /> Investimentos</a>
-          <a href="/goals" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all"><PieIcon size={20} /> Metas</a>
-          <a href="/credit-cards" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all"><CreditCard size={20} /> Cartões</a>
-        </nav>
-        <div className="p-6 m-4 flex flex-col items-center text-center">
-          <p className="text-sm text-white mb-4 truncate w-full">{userEmail}</p>
-          <button onClick={handleLogout} className="flex items-center justify-center gap-2 px-4 py-2 text-sm text-slate-300 border border-slate-700 rounded-xl hover:bg-slate-800 w-full"><LogOut size={16} /> Sair</button>
-        </div>
-      </aside>
+      {/* SIDEBAR PADRONIZADA (Substitui a antiga <aside>) */}
+      <Sidebar userEmail={userEmail} onLogout={handleLogout} />
 
       <main className="flex-1 overflow-y-auto relative z-0 p-4 md:p-8">
         
@@ -335,39 +321,6 @@ export function DashboardView({
         userId={userId} 
         onSuccess={handleSuccess} 
       />
-    </div>
-  );
-}
-
-// --- SUBCOMPONENTE MOBILE NAV ---
-function MobileNav({ userEmail, onLogout }: { userEmail: string | null, onLogout: () => void }) {
-  const [isOpen, setIsOpen] = useState(false);
-  return (
-    <div className="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center shadow-lg sticky top-0 z-50">
-      <div className="flex items-center gap-2">
-        <div className="bg-brand-500 p-1.5 rounded-lg"><Wallet className="text-white w-5 h-5" /></div>
-        <span className="font-bold text-lg tracking-tight">Flui</span>
-      </div>
-      <button onClick={() => setIsOpen(!isOpen)} className="p-2 hover:bg-slate-800 rounded-lg transition-colors">
-        {isOpen ? <X size={24} /> : <Menu size={24} />}
-      </button>
-      {isOpen && (
-        <div className="absolute top-full left-0 right-0 bg-slate-900 border-t border-slate-800 shadow-2xl animate-in slide-in-from-top-2">
-          <div className="p-4 space-y-4">
-            <div className="px-4 py-3 bg-slate-800/50 rounded-xl border border-slate-700">
-               <p className="text-xs text-slate-400 uppercase font-bold mb-1">Logado como</p>
-               <p className="text-sm font-medium truncate text-white">{userEmail}</p>
-            </div>
-            <nav className="flex flex-col gap-2">
-               <a href="/" className="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-800 text-white"><Wallet size={18} /> Dashboard</a>
-               <a href="/planning" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800"><Target size={18} /> Planejamento</a>
-               <a href="/goals" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-300 hover:bg-slate-800"><PieIcon size={18} /> Metas</a>
-            </nav>
-            <div className="h-px bg-slate-800 my-2"></div>
-            <button onClick={onLogout} className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-500/10 rounded-xl"><LogOut size={18} /> Sair</button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { getCurrentPrice } from "../../lib/priceService";
 import { 
-  Wallet, Briefcase, Plus, Loader2, Calendar, 
-  ChevronDown, LayoutDashboard, LogOut, RefreshCw, Trash2, Pencil, Target, CreditCard
+  Plus, Loader2, Calendar, ChevronDown, RefreshCw, Trash2, Pencil
 } from "lucide-react";
 import { NewAssetModal } from "../../components/NewAssetModal";
 import { MobileNav } from "../../components/MobileNav";
+import { Sidebar } from "../../components/Sidebar"; // <--- Sidebar Padrão
 import { toast } from "sonner";
 
 // --- TIPAGEM ---
@@ -31,10 +31,10 @@ export default function InvestmentsPage() {
   
   // Estados de Dados
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [plannedExpenses, setPlannedExpenses] = useState(0); // Novo: Dado real do Planejamento
+  const [plannedExpenses, setPlannedExpenses] = useState(0); 
   
   // Estados de Controle
-  const [currentDate, setCurrentDate] = useState(new Date()); // Data base para as colunas
+  const [currentDate, setCurrentDate] = useState(new Date()); 
   const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
   const [assetToEdit, setAssetToEdit] = useState<Asset | undefined>(undefined);
 
@@ -75,7 +75,7 @@ export default function InvestmentsPage() {
     setIsLoading(false);
   };
 
-  // Busca Gastos Planejados (Soma dos Budgets de Despesa)
+  // Busca Gastos Planejados
   const fetchPlannedExpenses = async (uid: string) => {
     const { data } = await supabase
       .from('categories')
@@ -104,13 +104,11 @@ export default function InvestmentsPage() {
   const formatMoney = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   // --- CÁLCULOS DINÂMICOS ---
-  // Gera as 3 colunas de meses baseadas na data selecionada
   const monthColumns = useMemo(() => {
     const cols = [];
     for (let i = 0; i < 3; i++) {
       const d = new Date(currentDate.getFullYear(), currentDate.getMonth() + i, 1);
       const label = d.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
-      // Capitaliza a primeira letra (ex: jan -> Jan)
       cols.push(label.charAt(0).toUpperCase() + label.slice(1));
     }
     return cols;
@@ -120,37 +118,12 @@ export default function InvestmentsPage() {
   const financialIndependenceGoal = 1000000; 
   const independenceRatio = (totalInvested / financialIndependenceGoal) * 100;
 
-  // Sidebar Helper
-  const SidebarLink = ({ href, icon: Icon, label, active = false }: any) => (
-    <a href={href} className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group ${active ? 'bg-teal-600 text-white shadow-md shadow-teal-600/30' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
-      <Icon size={20} className={active ? 'text-white' : 'text-slate-500 group-hover:text-white transition-colors'} /> {label}
-    </a>
-  );
-
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 font-sans flex-col md:flex-row">
       <MobileNav userEmail={userEmail} onLogout={handleLogout} />
       
-      {/* SIDEBAR */}
-      <aside className="w-72 bg-slate-900 hidden md:flex flex-col shadow-2xl z-10 relative shrink-0">
-        <div className="p-8">
-          <h1 className="text-3xl font-extrabold text-white flex items-center gap-3 tracking-tight">
-            <div className="bg-teal-600 p-2 rounded-lg shadow-lg"><Briefcase className="w-7 h-7 text-white" /></div>
-            Flui
-          </h1>
-        </div>
-        <nav className="flex-1 px-6 space-y-3 overflow-y-auto py-4 custom-scrollbar">
-          <p className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Principal</p>
-          <SidebarLink href="/" icon={LayoutDashboard} label="Dashboard" />
-          <SidebarLink href="/planning" icon={Target} label="Planejamento" />
-          <p className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mt-8 mb-2">Gestão</p>
-          <SidebarLink href="/investments" icon={Briefcase} label="Investimentos" active={true} />
-          <SidebarLink href="/credit-cards" icon={CreditCard} label="Cartões" />
-        </nav>
-        <div className="p-6 m-4 flex flex-col items-center text-center">
-             <button onClick={handleLogout} className="flex items-center justify-center gap-2 px-4 py-2 text-sm text-slate-400 hover:text-white w-full"><LogOut size={16} /> Sair</button>
-        </div>
-      </aside>
+      {/* SIDEBAR PADRÃO */}
+      <Sidebar userEmail={userEmail} onLogout={handleLogout} />
 
       <main className="flex-1 overflow-y-auto relative z-0 p-4 md:p-6 bg-slate-100/50">
         
@@ -175,7 +148,6 @@ export default function InvestmentsPage() {
                         <div className="relative group">
                             <div className="flex items-center gap-2 bg-white border border-slate-300 rounded-md px-3 py-1.5 text-sm font-bold text-slate-700 shadow-sm hover:border-teal-500 transition-colors cursor-pointer">
                                 <Calendar size={14} className="text-slate-400 group-hover:text-teal-500" /> 
-                                {/* O input type="month" fica invisível por cima para capturar o clique */}
                                 <input 
                                   type="month" 
                                   className="absolute inset-0 opacity-0 cursor-pointer"
@@ -193,7 +165,7 @@ export default function InvestmentsPage() {
                         
                         <span className="text-slate-300 mx-1">—</span>
                         
-                        {/* Data Final (Apenas Visual, baseada na inicial + 2 meses) */}
+                        {/* Data Final (Apenas Visual) */}
                         <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-md px-3 py-1.5 text-sm font-medium text-slate-500 cursor-not-allowed">
                              <Calendar size={14} className="text-slate-400" /> 
                              <span>{monthColumns[2]}</span>
@@ -201,7 +173,7 @@ export default function InvestmentsPage() {
                         
                         <div className="w-px h-6 bg-slate-300 mx-3 hidden sm:block"></div>
 
-                        {/* Botão Novo (Icones inúteis removidos) */}
+                        {/* Botão Novo */}
                         <button onClick={() => setIsAssetModalOpen(true)} className="flex items-center gap-1 bg-slate-800 text-white px-3 py-1.5 rounded-md text-sm font-bold shadow hover:bg-slate-900 transition-all">
                             <Plus size={16}/> <span className="hidden sm:inline">Novo Ativo</span>
                         </button>

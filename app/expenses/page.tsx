@@ -4,10 +4,10 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { 
-  Wallet, TrendingDown, Target, CreditCard, LogOut, 
-  Plus, Calendar, Search, Filter, ArrowLeft, Loader2, Trash2, Pencil
+  TrendingDown, Plus, Loader2, Trash2, Pencil, Search, Filter
 } from "lucide-react";
 import { MobileNav } from "../../components/MobileNav"; 
+import { Sidebar } from "../../components/Sidebar"; // <--- Importando a Sidebar Padrão
 import { NewTransactionModal } from "../../components/NewTransactionModal";
 import { toast } from "sonner";
 
@@ -67,15 +67,8 @@ export default function ExpensesPage() {
     <div className="flex h-screen bg-slate-50 text-slate-900 font-sans flex-col md:flex-row">
       <MobileNav userEmail={userEmail} onLogout={handleLogout} />
       
-      {/* Sidebar Simplificada para páginas internas */}
-      <aside className="w-72 bg-slate-900 hidden md:flex flex-col shadow-2xl z-10 relative shrink-0">
-        <div className="p-8"><h1 className="text-3xl font-extrabold text-white flex items-center gap-3">Flui</h1></div>
-        <nav className="flex-1 px-6 space-y-3 overflow-y-auto py-4 custom-scrollbar">
-           <a href="/" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all"><ArrowLeft size={20} /> Voltar ao Dashboard</a>
-           <div className="h-px bg-slate-800 my-2"></div>
-           <a href="/expenses" className="flex items-center gap-3 px-4 py-3 rounded-xl bg-rose-600 text-white shadow-md"><TrendingDown size={20} /> Despesas</a>
-        </nav>
-      </aside>
+      {/* SIDEBAR PADRONIZADA (Substitui a antiga <aside>) */}
+      <Sidebar userEmail={userEmail} onLogout={handleLogout} />
 
       <main className="flex-1 overflow-y-auto relative z-0 p-4 md:p-8">
         
@@ -130,13 +123,12 @@ export default function ExpensesPage() {
 
       </main>
 
-      {/* AQUI ESTAVA O ERRO: Agora passamos onSuccess */}
       <NewTransactionModal 
         isOpen={isModalOpen} 
         onClose={handleCloseModal} 
         userId={userId} 
         transactionToEdit={transactionToEdit}
-        onSuccess={fetchData} // <--- CORREÇÃO APLICADA
+        onSuccess={fetchData} 
       />
     </div>
   );
