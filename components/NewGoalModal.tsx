@@ -15,19 +15,23 @@ interface GoalProps {
 
 export function NewGoalModal({ isOpen, onClose, userId, goalToEdit }: GoalProps) {
   const [name, setName] = useState("");
-  const [targetAmount, setTargetAmount] = useState<number | undefined>(undefined);
-  const [currentAmount, setCurrentAmount] = useState<number | undefined>(undefined);
+  
+  // MUDANÇA: Strings para controlar o input e permitir vírgula
+  const [targetAmount, setTargetAmount] = useState<string>("");
+  const [currentAmount, setCurrentAmount] = useState<string>("");
+  
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (isOpen && goalToEdit) {
       setName(goalToEdit.name);
-      setTargetAmount(goalToEdit.target_amount);
-      setCurrentAmount(goalToEdit.current_amount);
+      // Converte números do banco para string ao carregar
+      setTargetAmount(String(goalToEdit.target_amount));
+      setCurrentAmount(String(goalToEdit.current_amount));
     } else {
       setName(""); 
-      setTargetAmount(undefined); 
-      setCurrentAmount(undefined);
+      setTargetAmount(""); 
+      setCurrentAmount("");
     }
   }, [isOpen, goalToEdit]);
 
@@ -39,11 +43,15 @@ export function NewGoalModal({ isOpen, onClose, userId, goalToEdit }: GoalProps)
     }
     setIsLoading(true);
 
+    // MUDANÇA: Converte para número (float) na hora de salvar
+    const finalTarget = parseFloat(targetAmount.replace(',', '.') || '0');
+    const finalCurrent = parseFloat(currentAmount.replace(',', '.') || '0');
+
     const payload = { 
         user_id: userId, 
         name, 
-        target_amount: targetAmount, 
-        current_amount: currentAmount || 0 
+        target_amount: finalTarget, 
+        current_amount: finalCurrent 
     };
     
     let error;
@@ -60,7 +68,7 @@ export function NewGoalModal({ isOpen, onClose, userId, goalToEdit }: GoalProps)
         toast.error("Erro ao salvar meta.");
     } else {
       toast.success(goalToEdit ? "Meta atualizada!" : "Meta criada com sucesso!");
-      onClose(); // Na página de planejamento, onClose aciona o recarregamento (fetch)
+      onClose(); 
     }
     setIsLoading(false);
   };
@@ -79,7 +87,7 @@ export function NewGoalModal({ isOpen, onClose, userId, goalToEdit }: GoalProps)
              </div>
              <h2 className="text-xl font-bold">{goalToEdit ? "Editar Meta" : "Nova Meta"}</h2>
           </div>
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-200 text-slate-400 transition-colors">
+          <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-200 text-slate-500 transition-colors">
              <X size={20} />
           </button>
         </div>
@@ -103,11 +111,11 @@ export function NewGoalModal({ isOpen, onClose, userId, goalToEdit }: GoalProps)
               <CurrencyInput
                   placeholder="R$ 0,00"
                   decimalsLimit={2}
-                  decimalScale={2}
                   intlConfig={{ locale: 'pt-BR', currency: 'BRL' }}
-                  onValueChange={(value) => setTargetAmount(value ? Number(value.replace(",", ".")) : undefined)}
+                  // Value é string
+                  value={targetAmount}
+                  onValueChange={(value) => setTargetAmount(value || "")}
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none font-bold text-lg text-slate-800 transition-all"
-                  value={targetAmount} // Alterado defaultValue para value para controle correto
               />
           </div>
 
@@ -116,11 +124,11 @@ export function NewGoalModal({ isOpen, onClose, userId, goalToEdit }: GoalProps)
               <CurrencyInput
                   placeholder="R$ 0,00"
                   decimalsLimit={2}
-                  decimalScale={2}
                   intlConfig={{ locale: 'pt-BR', currency: 'BRL' }}
-                  onValueChange={(value) => setCurrentAmount(value ? Number(value.replace(",", ".")) : undefined)}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none font-medium text-slate-700 transition-all"
+                  // Value é string
                   value={currentAmount}
+                  onValueChange={(value) => setCurrentAmount(value || "")}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none font-medium text-slate-700 transition-all"
               />
           </div>
 

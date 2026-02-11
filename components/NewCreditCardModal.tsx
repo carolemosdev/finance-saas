@@ -16,7 +16,10 @@ interface ModalProps {
 
 export function NewCreditCardModal({ isOpen, onClose, userId, onSuccess, cardToEdit }: ModalProps) {
   const [name, setName] = useState("");
-  const [limit, setLimit] = useState<number | undefined>(undefined);
+  
+  // MUDANÇA: String para controlar o input
+  const [limit, setLimit] = useState<string>("");
+  
   const [closingDay, setClosingDay] = useState(1);
   const [dueDay, setDueDay] = useState(10);
   const [brand, setBrand] = useState("MASTERCARD");
@@ -26,14 +29,14 @@ export function NewCreditCardModal({ isOpen, onClose, userId, onSuccess, cardToE
   useEffect(() => {
     if (isOpen && cardToEdit) {
       setName(cardToEdit.name);
-      setLimit(cardToEdit.limit_amount);
+      // Converter para string ao carregar
+      setLimit(String(cardToEdit.limit_amount));
       setClosingDay(cardToEdit.closing_day);
       setDueDay(cardToEdit.due_day);
       setBrand(cardToEdit.brand);
       setColor(cardToEdit.color || "#3b82f6");
     } else {
-      // Resetar form se for novo
-      setName(""); setLimit(undefined); setClosingDay(1); setDueDay(10); setBrand("MASTERCARD"); setColor("#3b82f6");
+      setName(""); setLimit(""); setClosingDay(1); setDueDay(10); setBrand("MASTERCARD"); setColor("#3b82f6");
     }
   }, [isOpen, cardToEdit]);
 
@@ -45,10 +48,13 @@ export function NewCreditCardModal({ isOpen, onClose, userId, onSuccess, cardToE
     }
     setIsLoading(true);
 
+    // MUDANÇA: Converter para número ao salvar
+    const finalLimit = parseFloat(limit.replace(',', '.') || '0');
+
     const payload = { 
         user_id: userId, 
         name, 
-        limit_amount: limit, 
+        limit_amount: finalLimit, 
         closing_day: closingDay, 
         due_day: dueDay, 
         brand, 
@@ -112,36 +118,23 @@ export function NewCreditCardModal({ isOpen, onClose, userId, onSuccess, cardToE
               <CurrencyInput
                   placeholder="R$ 0,00"
                   decimalsLimit={2}
-                  decimalScale={2}
                   intlConfig={{ locale: 'pt-BR', currency: 'BRL' }}
-                  onValueChange={(value) => setLimit(value ? Number(value.replace(",", ".")) : undefined)}
+                  // Value é string
+                  value={limit}
+                  onValueChange={(value) => setLimit(value || "")}
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none font-bold text-lg text-slate-800 transition-all"
-                  value={limit} // Mudei de defaultValue para value para controle correto no Edit
               />
           </div>
 
+          {/* ... Resto do form (Datas, Cores) mantido igual ... */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1 flex items-center gap-1"><Calendar size={12}/> Fechamento</label>
-               <input 
-                 type="number" 
-                 min="1" max="31" 
-                 required 
-                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none font-medium text-center text-slate-700" 
-                 value={closingDay} 
-                 onChange={e => setClosingDay(Number(e.target.value))} 
-               />
+               <input type="number" min="1" max="31" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-brand-500 outline-none font-medium text-center text-slate-700" value={closingDay} onChange={e => setClosingDay(Number(e.target.value))} />
             </div>
             <div className="space-y-1.5">
                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1 flex items-center gap-1"><Calendar size={12}/> Vencimento</label>
-               <input 
-                 type="number" 
-                 min="1" max="31" 
-                 required 
-                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none font-medium text-center text-slate-700" 
-                 value={dueDay} 
-                 onChange={e => setDueDay(Number(e.target.value))} 
-               />
+               <input type="number" min="1" max="31" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-brand-500 outline-none font-medium text-center text-slate-700" value={dueDay} onChange={e => setDueDay(Number(e.target.value))} />
             </div>
           </div>
 
@@ -149,13 +142,7 @@ export function NewCreditCardModal({ isOpen, onClose, userId, onSuccess, cardToE
               <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Cor do Cartão</label>
               <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
                 {['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#0f172a', '#ec4899'].map(c => (
-                  <button 
-                    key={c} 
-                    type="button" 
-                    onClick={() => setColor(c)} 
-                    className={`w-9 h-9 rounded-full border-[3px] transition-all hover:scale-110 ${color === c ? 'border-slate-300 scale-110 shadow-md' : 'border-transparent'}`} 
-                    style={{ backgroundColor: c }} 
-                  />
+                  <button key={c} type="button" onClick={() => setColor(c)} className={`w-9 h-9 rounded-full border-[3px] transition-all hover:scale-110 ${color === c ? 'border-slate-300 scale-110 shadow-md' : 'border-transparent'}`} style={{ backgroundColor: c }} />
                 ))}
               </div>
           </div>
