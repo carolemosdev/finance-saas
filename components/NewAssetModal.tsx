@@ -6,38 +6,38 @@ import { supabase } from "../lib/supabase";
 import CurrencyInput from 'react-currency-input-field';
 import { toast } from "sonner";
 
-// --- INTERFACE ATUALIZADA ---
 interface NewAssetModalProps {
   isOpen: boolean;
   onClose: () => void;
   userId: string | null;
   assetToEdit?: any;
-  onSuccess: () => void; // <--- OBRIGATÓRIO: Para atualizar a lista após salvar
+  onSuccess: () => void;
 }
 
 export function NewAssetModal({ isOpen, onClose, userId, assetToEdit, onSuccess }: NewAssetModalProps) {
   const [name, setName] = useState("");
   const [ticker, setTicker] = useState("");
   const [type, setType] = useState<"FIXED" | "STOCK" | "FII" | "CRYPTO">("FIXED");
-  const [amount, setAmount] = useState<number | undefined>(undefined); // Valor Total
+  
+  // MUDANÇA: String para controlar o input
+  const [amount, setAmount] = useState<string | undefined>(""); 
   const [quantity, setQuantity] = useState<number>(1);
   const [loading, setLoading] = useState(false);
 
-  // Carregar dados se for edição
   useEffect(() => {
     if (isOpen) {
       if (assetToEdit) {
         setName(assetToEdit.name || "");
         setTicker(assetToEdit.ticker || "");
         setType(assetToEdit.type || "FIXED");
-        setAmount(assetToEdit.current_amount);
+        // Converte para string ao carregar
+        setAmount(String(assetToEdit.current_amount)); 
         setQuantity(assetToEdit.quantity || 1);
       } else {
-        // Resetar form
         setName("");
         setTicker("");
         setType("FIXED");
-        setAmount(undefined);
+        setAmount("");
         setQuantity(1);
       }
     }
@@ -51,12 +51,15 @@ export function NewAssetModal({ isOpen, onClose, userId, assetToEdit, onSuccess 
     }
     setLoading(true);
 
+    // MUDANÇA: Converte para número ao salvar
+    const finalAmount = parseFloat(amount.replace(',', '.'));
+
     const payload = {
       user_id: userId,
-      name: name || ticker, // Se não tiver nome, usa o ticker
+      name: name || ticker, 
       ticker: ticker.toUpperCase(),
       type,
-      current_amount: amount,
+      current_amount: finalAmount,
       quantity
     };
 
@@ -74,7 +77,7 @@ export function NewAssetModal({ isOpen, onClose, userId, assetToEdit, onSuccess 
       toast.error("Erro ao salvar ativo");
     } else {
       toast.success(assetToEdit ? "Ativo atualizado!" : "Ativo adicionado!");
-      onSuccess(); // <--- ATUALIZA A TELA DE FUNDO
+      onSuccess(); 
       onClose();
     }
     setLoading(false);
@@ -96,8 +99,8 @@ export function NewAssetModal({ isOpen, onClose, userId, assetToEdit, onSuccess 
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          {/* ... (TIPO e TICKER Mantidos iguais) ... */}
           
-          {/* Tipo de Ativo */}
           <div>
             <label className="text-xs font-bold text-slate-400 uppercase mb-2 block">Tipo de Ativo</label>
             <div className="grid grid-cols-2 gap-2">
@@ -108,54 +111,38 @@ export function NewAssetModal({ isOpen, onClose, userId, assetToEdit, onSuccess 
             </div>
           </div>
 
-          {/* Nome e Ticker */}
           <div className="grid grid-cols-2 gap-4">
             <div>
                <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Ticker / Código</label>
                <div className="relative">
                  <Hash className="absolute left-3 top-3 text-slate-400" size={16} />
-                 <input 
-                   placeholder={type === 'CRYPTO' ? "BTC" : "PETR4"} 
-                   value={ticker} 
-                   onChange={e => setTicker(e.target.value.toUpperCase())} 
-                   className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-brand-500 uppercase" 
-                 />
+                 <input placeholder={type === 'CRYPTO' ? "BTC" : "PETR4"} value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-brand-500 uppercase" />
                </div>
             </div>
             <div>
                <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Nome (Opcional)</label>
-               <input 
-                 placeholder="Ex: Petrobras" 
-                 value={name} 
-                 onChange={e => setName(e.target.value)} 
-                 className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 outline-none focus:border-brand-500" 
-               />
+               <input placeholder="Ex: Petrobras" value={name} onChange={e => setName(e.target.value)} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 outline-none focus:border-brand-500" />
             </div>
           </div>
 
-          {/* Quantidade e Valor Total */}
           <div className="grid grid-cols-2 gap-4">
              <div>
                 <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Quantidade</label>
-                <input 
-                  type="number" 
-                  step="0.0000001"
-                  value={quantity} 
-                  onChange={e => setQuantity(Number(e.target.value))} 
-                  className="w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-bold outline-none focus:border-brand-500" 
-                />
+                <input type="number" step="0.0000001" value={quantity} onChange={e => setQuantity(Number(e.target.value))} className="w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-bold outline-none focus:border-brand-500" />
              </div>
              <div>
-                <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Valor Total Investido</label>
+                <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Valor Total</label>
                 <div className="relative">
                   <DollarSign className="absolute left-3 top-3.5 text-slate-400" size={16} />
+                  
+                  {/* MUDANÇA: Input de Valor */}
                   <CurrencyInput
                     placeholder="0,00"
                     decimalsLimit={2}
                     intlConfig={{ locale: 'pt-BR', currency: 'BRL' }}
-                    onValueChange={(value) => setAmount(value ? Number(value.replace(",", ".")) : undefined)}
-                    className="w-full pl-9 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-brand-500 text-slate-900 font-bold"
                     value={amount}
+                    onValueChange={(value) => setAmount(value)}
+                    className="w-full pl-9 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-brand-500 text-slate-900 font-bold"
                   />
                 </div>
              </div>

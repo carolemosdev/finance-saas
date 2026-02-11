@@ -1,97 +1,148 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Loader2, DollarSign, Hash } from "lucide-react";
+import { X, Loader2, Calendar, FileText, Tag, CreditCard } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import CurrencyInput from 'react-currency-input-field';
 import { toast } from "sonner";
 
-interface NewAssetModalProps {
+interface NewTransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
   userId: string | null;
-  assetToEdit?: any;
+  transactionToEdit?: any;
   onSuccess: () => void;
 }
 
-export function NewAssetModal({ isOpen, onClose, userId, assetToEdit, onSuccess }: NewAssetModalProps) {
-  const [name, setName] = useState("");
-  const [ticker, setTicker] = useState("");
-  const [type, setType] = useState<"FIXED" | "STOCK" | "FII" | "CRYPTO">("FIXED");
+// O ERRO ESTAVA AQUI: O nome da função exportada deve ser NewTransactionModal
+export function NewTransactionModal({ isOpen, onClose, userId, transactionToEdit, onSuccess }: NewTransactionModalProps) {
+  const [description, setDescription] = useState("");
+  const [amount, setAmount] = useState<string | undefined>(""); // String para permitir edição
+  const [type, setType] = useState<"INCOME" | "EXPENSE">("EXPENSE");
+  const [categoryId, setCategoryId] = useState("");
+  const [newCategoryName, setNewCategoryName] = useState(""); 
+  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [creditCardId, setCreditCardId] = useState<string | "">(""); 
   
-  // MUDANÇA: String para controlar o input
-  const [amount, setAmount] = useState<string | undefined>(""); 
-  const [quantity, setQuantity] = useState<number>(1);
-  const [loading, setLoading] = useState(false);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [creditCards, setCreditCards] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
 
+  // Carrega dados ao abrir ou mudar usuário
   useEffect(() => {
-    if (isOpen) {
-      if (assetToEdit) {
-        setName(assetToEdit.name || "");
-        setTicker(assetToEdit.ticker || "");
-        setType(assetToEdit.type || "FIXED");
-        // Converte para string ao carregar
-        setAmount(String(assetToEdit.current_amount)); 
-        setQuantity(assetToEdit.quantity || 1);
+    if (isOpen && userId) {
+      loadCategories();
+      loadCreditCards();
+      
+      if (transactionToEdit) {
+        setDescription(transactionToEdit.description);
+        // Converte number -> string para o input
+        setAmount(String(transactionToEdit.amount));
+        setType(transactionToEdit.type);
+        setCategoryId(transactionToEdit.category_id || "");
+        setDate(transactionToEdit.date.split("T")[0]);
+        setCreditCardId(transactionToEdit.credit_card_id || "");
       } else {
-        setName("");
-        setTicker("");
-        setType("FIXED");
-        setAmount("");
-        setQuantity(1);
+        resetForm();
       }
     }
-  }, [isOpen, assetToEdit]);
+  }, [isOpen, userId, transactionToEdit]);
+
+  const resetForm = () => {
+    setDescription("");
+    setAmount("");
+    setType("EXPENSE");
+    setCategoryId("");
+    setNewCategoryName("");
+    setDate(new Date().toISOString().split("T")[0]);
+    setCreditCardId("");
+    setIsCreatingCategory(false);
+  };
+
+  const loadCategories = async () => {
+    const { data } = await supabase.from("categories").select("*").eq("user_id", userId!);
+    if (data) setCategories(data);
+  };
+
+  const loadCreditCards = async () => {
+    const { data } = await supabase.from("credit_cards").select("*").eq("user_id", userId!);
+    if (data) setCreditCards(data);
+  };
+
+  const handleCreateCategory = async () => {
+    if (!newCategoryName.trim()) return;
+    setIsLoading(true);
+    const { data } = await supabase.from("categories").insert([{ 
+        name: newCategoryName, 
+        user_id: userId,
+        type: type 
+    }]).select();
+
+    if (data) {
+      setCategories([...categories, data[0]]);
+      setCategoryId(data[0].id);
+      setIsCreatingCategory(false);
+      setNewCategoryName("");
+      toast.success("Categoria criada!");
+    } else {
+      toast.error("Erro ao criar categoria.");
+    }
+    setIsLoading(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userId || !amount) {
-      toast.error("Preencha o valor do investimento!");
+    if (!amount || !description || !userId) {
+      toast.warning("Preencha valor e descrição.");
       return;
     }
-    setLoading(true);
+    
+    setIsLoading(true);
 
-    // MUDANÇA: Converte para número ao salvar
+    // Converte string -> number (float) ao salvar
     const finalAmount = parseFloat(amount.replace(',', '.'));
 
     const payload = {
       user_id: userId,
-      name: name || ticker, 
-      ticker: ticker.toUpperCase(),
+      description,
+      amount: finalAmount,
       type,
-      current_amount: finalAmount,
-      quantity
+      category_id: categoryId || null,
+      date,
+      credit_card_id: creditCardId || null,
     };
 
     let error;
 
-    if (assetToEdit) {
-      const { error: err } = await supabase.from('assets').update(payload).eq('id', assetToEdit.id);
-      error = err;
+    if (transactionToEdit) {
+       const { error: err } = await supabase.from("transactions").update(payload).eq("id", transactionToEdit.id);
+       error = err;
     } else {
-      const { error: err } = await supabase.from('assets').insert(payload);
-      error = err;
+       const { error: err } = await supabase.from("transactions").insert([payload]);
+       error = err;
     }
 
     if (error) {
-      toast.error("Erro ao salvar ativo");
+      console.error(error);
+      toast.error("Erro ao salvar transação.");
     } else {
-      toast.success(assetToEdit ? "Ativo atualizado!" : "Ativo adicionado!");
+      toast.success(transactionToEdit ? "Transação atualizada!" : "Transação salva!");
       onSuccess(); 
       onClose();
     }
-    setLoading(false);
+    setIsLoading(false);
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-all">
+      <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         
         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
           <h2 className="text-xl font-bold text-slate-800">
-            {assetToEdit ? "Editar Ativo" : "Novo Investimento"}
+            {transactionToEdit ? "Editar Transação" : "Nova Transação"}
           </h2>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-200 text-slate-500 transition-colors">
             <X size={20} />
@@ -99,62 +150,133 @@ export function NewAssetModal({ isOpen, onClose, userId, assetToEdit, onSuccess 
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          {/* ... (TIPO e TICKER Mantidos iguais) ... */}
           
-          <div>
-            <label className="text-xs font-bold text-slate-400 uppercase mb-2 block">Tipo de Ativo</label>
-            <div className="grid grid-cols-2 gap-2">
-               <button type="button" onClick={() => setType('FIXED')} className={`p-2 rounded-xl text-sm font-bold border ${type === 'FIXED' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>Renda Fixa</button>
-               <button type="button" onClick={() => setType('STOCK')} className={`p-2 rounded-xl text-sm font-bold border ${type === 'STOCK' ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>Ações</button>
-               <button type="button" onClick={() => setType('FII')} className={`p-2 rounded-xl text-sm font-bold border ${type === 'FII' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>FIIs</button>
-               <button type="button" onClick={() => setType('CRYPTO')} className={`p-2 rounded-xl text-sm font-bold border ${type === 'CRYPTO' ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>Cripto</button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-               <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Ticker / Código</label>
-               <div className="relative">
-                 <Hash className="absolute left-3 top-3 text-slate-400" size={16} />
-                 <input placeholder={type === 'CRYPTO' ? "BTC" : "PETR4"} value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-brand-500 uppercase" />
-               </div>
-            </div>
-            <div>
-               <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Nome (Opcional)</label>
-               <input placeholder="Ex: Petrobras" value={name} onChange={e => setName(e.target.value)} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 outline-none focus:border-brand-500" />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-             <div>
-                <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Quantidade</label>
-                <input type="number" step="0.0000001" value={quantity} onChange={e => setQuantity(Number(e.target.value))} className="w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 font-bold outline-none focus:border-brand-500" />
-             </div>
-             <div>
-                <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Valor Total</label>
-                <div className="relative">
-                  <DollarSign className="absolute left-3 top-3.5 text-slate-400" size={16} />
-                  
-                  {/* MUDANÇA: Input de Valor */}
-                  <CurrencyInput
-                    placeholder="0,00"
-                    decimalsLimit={2}
-                    intlConfig={{ locale: 'pt-BR', currency: 'BRL' }}
-                    value={amount}
-                    onValueChange={(value) => setAmount(value)}
-                    className="w-full pl-9 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-brand-500 text-slate-900 font-bold"
-                  />
-                </div>
-             </div>
-          </div>
-
-          <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose} className="flex-1 py-3.5 text-slate-500 font-bold hover:bg-slate-50 rounded-xl transition-colors">Cancelar</button>
-            <button type="submit" disabled={loading} className="flex-1 py-3.5 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-colors flex items-center justify-center gap-2">
-              {loading ? <Loader2 className="animate-spin" /> : "Salvar"}
+          <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setType("INCOME")}
+              className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${
+                type === "INCOME" ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              Entrada
+            </button>
+            <button
+              type="button"
+              onClick={() => setType("EXPENSE")}
+              className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${
+                type === "EXPENSE" ? "bg-white text-rose-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              Saída
             </button>
           </div>
 
+          <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Valor</label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <span className={`font-bold ${type === 'INCOME' ? 'text-emerald-500' : 'text-rose-500'}`}>R$</span>
+                </div>
+                <CurrencyInput
+                  id="amount"
+                  name="amount"
+                  placeholder="0,00"
+                  decimalsLimit={2}
+                  decimalScale={2}
+                  intlConfig={{ locale: 'pt-BR', currency: 'BRL' }}
+                  value={amount}
+                  onValueChange={(value) => setAmount(value)}
+                  className={`w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:border-transparent transition-all font-bold text-lg ${type === 'INCOME' ? 'focus:ring-emerald-500/20 text-emerald-700' : 'focus:ring-rose-500/20 text-rose-700'}`}
+                />
+              </div>
+          </div>
+
+          <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Descrição</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><FileText size={18} className="text-slate-400"/></div>
+                <input 
+                  type="text" 
+                  required 
+                  placeholder="Ex: Salário, Aluguel..."
+                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-slate-900 font-medium placeholder:text-slate-400"
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                />
+              </div>
+          </div>
+
+          <div className="space-y-1.5">
+              <div className="flex justify-between items-center px-1">
+                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Categoria</label>
+                 <button type="button" onClick={() => setIsCreatingCategory(!isCreatingCategory)} className="text-[10px] text-brand-600 font-bold hover:underline">
+                    {isCreatingCategory ? "Cancelar" : "+ Nova Categoria"}
+                 </button>
+              </div>
+              
+              {isCreatingCategory ? (
+                 <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="Nome da categoria..." 
+                      className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-brand-500 outline-none text-sm"
+                      value={newCategoryName}
+                      onChange={e => setNewCategoryName(e.target.value)}
+                    />
+                    <button type="button" onClick={handleCreateCategory} disabled={isLoading} className="bg-brand-600 text-white px-4 rounded-xl font-bold text-sm hover:bg-brand-700">OK</button>
+                 </div>
+              ) : (
+                <div className="relative">
+                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Tag size={18} className="text-slate-400"/></div>
+                   <select 
+                     className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-slate-900 font-medium appearance-none"
+                     value={categoryId}
+                     onChange={e => setCategoryId(e.target.value)}
+                   >
+                     <option value="">Sem Categoria</option>
+                     {categories
+                        .filter(c => !c.type || c.type === type) 
+                        .map(c => <option key={c.id} value={c.id}>{c.name}</option>)
+                     }
+                   </select>
+                </div>
+              )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Data</label>
+                 <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Calendar size={18} className="text-slate-400"/></div>
+                    <input type="date" required className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-brand-500 outline-none font-medium text-slate-700" value={date} onChange={e => setDate(e.target.value)} />
+                 </div>
+              </div>
+              
+              <div className="space-y-1.5">
+                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Cartão (Opcional)</label>
+                 <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><CreditCard size={18} className="text-slate-400"/></div>
+                    <select 
+                      className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-brand-500 outline-none font-medium text-slate-700 appearance-none disabled:opacity-50"
+                      value={creditCardId}
+                      onChange={e => setCreditCardId(e.target.value)}
+                      disabled={type === 'INCOME'}
+                    >
+                      <option value="">Nenhum</option>
+                      {creditCards.map(cc => <option key={cc.id} value={cc.id}>{cc.name}</option>)}
+                    </select>
+                 </div>
+              </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className={`w-full text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95 mt-4 ${type === 'INCOME' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/30' : 'bg-rose-600 hover:bg-rose-700 shadow-rose-600/30'}`}
+          >
+            {isLoading ? <Loader2 className="animate-spin" /> : (transactionToEdit ? "Salvar Alterações" : "Adicionar Transação")}
+          </button>
         </form>
       </div>
     </div>
