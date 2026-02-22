@@ -17,7 +17,7 @@ export default function CreditCardsPage() {
   const router = useRouter();
   
   // --- ESTADOS DE PRIVACIDADE E TEMA ---
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [isPrivacyMode, setIsPrivacyMode] = useState(false);
 
@@ -127,11 +127,11 @@ export default function CreditCardsPage() {
                </button>
 
                <button 
-                  onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} 
+                  onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')} 
                   className="p-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all shadow-sm active:scale-95 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
-                  title={theme === 'dark' ? "Modo Claro" : "Modo Escuro"}
+                  title={resolvedTheme === 'dark' ? "Modo Claro" : "Modo Escuro"}
                >
-                  {theme === 'dark' ? <Sun size={18}/> : <Moon size={18}/>}
+                  {resolvedTheme === 'dark' ? <Sun size={18}/> : <Moon size={18}/>}
                </button>
 
                <button onClick={() => setIsModalOpen(true)} className="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-xl flex items-center gap-2 font-bold shadow-lg transition-all hover:scale-105 active:scale-95 dark:bg-brand-600 dark:hover:bg-brand-700">

@@ -40,7 +40,7 @@ export function DashboardView({
 }: DashboardProps) {
   
   const router = useRouter();
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
   
   const [mounted, setMounted] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -187,12 +187,12 @@ export function DashboardView({
 
                  {/* Botão Tema */}
                  <button 
-                    onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} 
-                    className="p-3 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all shadow-sm active:scale-95 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
-                    title={theme === 'dark' ? "Modo Claro" : "Modo Escuro"}
-                 >
-                    {theme === 'dark' ? <Sun size={18}/> : <Moon size={18}/>}
-                 </button>
+   onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')} 
+   className="p-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all shadow-sm active:scale-95 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
+   title={resolvedTheme === 'dark' ? "Modo Claro" : "Modo Escuro"}
+>
+   {resolvedTheme === 'dark' ? <Sun size={18}/> : <Moon size={18}/>}
+</button>
 
                  {/* Botão Adicionar */}
                  <button onClick={() => setIsModalOpen(true)} className="hidden md:flex bg-slate-900 text-white p-3 rounded-xl hover:bg-slate-800 transition-all shadow-lg hover:shadow-xl active:scale-95 dark:bg-brand-600 dark:hover:bg-brand-700">

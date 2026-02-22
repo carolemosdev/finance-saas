@@ -30,7 +30,7 @@ export default function InvestmentsPage() {
   const router = useRouter();
 
   // --- ESTADOS DE PRIVACIDADE E TEMA ---
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [isPrivacyMode, setIsPrivacyMode] = useState(false);
 
@@ -224,11 +224,11 @@ export default function InvestmentsPage() {
                             </button>
 
                             <button 
-                                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} 
+                                onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')} 
                                 className="p-2 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-all shadow-sm active:scale-95 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
-                                title={theme === 'dark' ? "Modo Claro" : "Modo Escuro"}
+                                title={resolvedTheme === 'dark' ? "Modo Claro" : "Modo Escuro"}
                             >
-                                {theme === 'dark' ? <Sun size={16}/> : <Moon size={16}/>}
+                                {resolvedTheme === 'dark' ? <Sun size={16}/> : <Moon size={16}/>}
                             </button>
 
                             <button onClick={() => setIsAssetModalOpen(true)} className="flex items-center gap-1 bg-slate-800 text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow hover:bg-slate-900 transition-all dark:bg-brand-600 dark:hover:bg-brand-700">
