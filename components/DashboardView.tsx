@@ -1,16 +1,18 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
+import { useTheme } from "next-themes"; // <--- Importando hook de tema
 import { 
   Wallet, TrendingUp, TrendingDown, Target, CreditCard, LogOut, 
-  Menu, Plus, PieChart as PieIcon, ArrowRight, X, Loader2
+  Menu, Plus, PieChart as PieIcon, ArrowRight, X, Loader2,
+  Eye, EyeOff, Sun, Moon // <--- Novos ícones
 } from "lucide-react";
 import { NewTransactionModal } from "./NewTransactionModal"; 
 import { Sidebar } from "./Sidebar"; 
 import { MobileNav } from "./MobileNav"; 
-import { InsightsWidget } from "./InsightsWidget"; // <--- Importando nosso Assistente Inteligente
+import { InsightsWidget } from "./InsightsWidget"; 
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   BarChart, Bar, Cell, PieChart, Pie
@@ -27,8 +29,6 @@ interface DashboardProps {
   userEmail: string | null;
   userId: string;
   totalInvested: number;
-  hasAnyTransaction?: boolean;
-  hasAnyInvestment?: boolean;
 }
 
 export function DashboardView({ 
@@ -40,28 +40,34 @@ export function DashboardView({
 }: DashboardProps) {
   
   const router = useRouter();
+  const { theme, setTheme } = useTheme();
+  
+  const [mounted, setMounted] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // --- ESTADO MODO PRIVACIDADE ---
+  const [isPrivacyMode, setIsPrivacyMode] = useState(false);
 
-  // --- FILTROS DE DATA (Estado Local) ---
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
-  // --- LÓGICA DE PROCESSAMENTO (useMemo para performance) ---
+  // Evita erros de hidratação com o next-themes
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const { summary, areaChartData, categoryStats, budgetProgress, filteredTransactions } = useMemo(() => {
     
-    // 1. Filtrar Transações pelo Mês/Ano Selecionado
     const filtered = transactions.filter(t => {
       const d = new Date(t.date);
       const dateOffset = new Date(d.getTime() + d.getTimezoneOffset() * 60000);
       return dateOffset.getMonth() === selectedMonth && dateOffset.getFullYear() === selectedYear;
     });
 
-    // 2. Calcular Resumo (Cards do Topo)
     const income = filtered.filter(t => t.type === 'INCOME').reduce((acc, t) => acc + Number(t.amount), 0);
     const expense = filtered.filter(t => t.type === 'EXPENSE').reduce((acc, t) => acc + Number(t.amount), 0);
     const balance = income - expense;
 
-    // 3. Preparar Dados do Gráfico de Área (Dia a Dia)
     const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
     const dailyDataMap: any = {};
     for(let i=1; i<=daysInMonth; i++) dailyDataMap[i] = { day: i, income: 0, expense: 0 };
@@ -76,7 +82,6 @@ export function DashboardView({
     });
     const areaData = Object.values(dailyDataMap);
 
-    // 4. Categorias: Realizado vs Planejado (Meta)
     const catStats = categories
       .filter(c => c.type === 'EXPENSE')
       .map(cat => {
@@ -92,7 +97,6 @@ export function DashboardView({
       .filter(c => c.spent > 0 || c.budget > 0)
       .sort((a, b) => b.percent - a.percent); 
 
-    // 5. Progresso Geral do Orçamento (Donut Chart)
     const totalBudget = catStats.reduce((acc, c) => acc + c.budget, 0);
     const totalSpent = catStats.reduce((acc, c) => acc + c.spent, 0);
     const progress = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
@@ -106,28 +110,32 @@ export function DashboardView({
     };
   }, [transactions, categories, selectedMonth, selectedYear]);
 
-  // --- AÇÕES ---
   const handleLogout = async () => { await supabase.auth.signOut(); router.push("/auth"); };
   const handleSuccess = () => { setIsModalOpen(false); router.refresh(); };
-  const formatMoney = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+  
+  // --- FORMATAÇÃO INTELIGENTE (Respeita Privacidade) ---
+  const formatMoney = (val: number) => {
+    if (isPrivacyMode) return "R$ •••••";
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+  };
+
+  if (!mounted) return null; // Previne Flicker do Next-Themes
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 font-sans flex-col md:flex-row dark:bg-slate-950 dark:text-slate-100">
       
-      {/* MOBILE NAV PADRONIZADA */}
       <MobileNav userEmail={userEmail} onLogout={handleLogout} />
-
-      {/* SIDEBAR PADRONIZADA */}
       <Sidebar userEmail={userEmail} onLogout={handleLogout} />
 
       <main className="flex-1 overflow-y-auto relative z-0 p-4 md:p-8 bg-slate-50 dark:bg-slate-950">
         
-        {/* --- HEADER: Filtros e Totais --- */}
+        {/* --- CABEÇALHO SUPERIOR (Filtros, Controles e KPIs) --- */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
            
-           {/* Seletor de Data e Título */}
+           {/* Lado Esquerdo: Filtros e Título */}
            <div className="flex items-center gap-4">
               <h2 className="text-2xl font-extrabold text-slate-800 hidden md:block dark:text-slate-100">Balanço Mensal</h2>
+              
               <div className="flex bg-white rounded-lg shadow-sm border border-slate-200 p-1 dark:bg-slate-900 dark:border-slate-800">
                  <select 
                    value={selectedMonth} 
@@ -147,25 +155,51 @@ export function DashboardView({
               </div>
            </div>
 
-           {/* KPIs (Indicadores) */}
-           <div className="flex gap-6 w-full md:w-auto overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
-              <div className="flex items-center gap-3 shrink-0">
-                 <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"><TrendingUp size={20}/></div>
-                 <div><p className="text-[10px] uppercase font-bold text-slate-400">Receitas</p><p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{formatMoney(summary.income)}</p></div>
+           {/* Lado Direito: KPIs e Botões de Controle */}
+           <div className="flex flex-col md:flex-row items-end md:items-center gap-6 w-full md:w-auto">
+              
+              {/* KPIs */}
+              <div className="flex gap-6 overflow-x-auto pb-2 md:pb-0 scrollbar-hide w-full md:w-auto">
+                  <div className="flex items-center gap-3 shrink-0">
+                    <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"><TrendingUp size={20}/></div>
+                    <div><p className="text-[10px] uppercase font-bold text-slate-400">Receitas</p><p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{formatMoney(summary.income)}</p></div>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <div className="p-2 bg-rose-100 rounded-lg text-rose-600 dark:bg-rose-900/30 dark:text-rose-400"><TrendingDown size={20}/></div>
+                    <div><p className="text-[10px] uppercase font-bold text-slate-400">Despesas</p><p className="text-lg font-bold text-rose-600 dark:text-rose-400">{formatMoney(summary.expense)}</p></div>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <div className="p-2 bg-brand-100 rounded-lg text-brand-600 dark:bg-brand-900/30 dark:text-brand-400"><Wallet size={20}/></div>
+                    <div><p className="text-[10px] uppercase font-bold text-slate-400">Saldo</p><p className={`text-lg font-bold ${summary.balance >= 0 ? 'text-brand-600 dark:text-brand-400' : 'text-rose-600 dark:text-rose-400'}`}>{formatMoney(summary.balance)}</p></div>
+                  </div>
               </div>
-              <div className="flex items-center gap-3 shrink-0">
-                 <div className="p-2 bg-rose-100 rounded-lg text-rose-600 dark:bg-rose-900/30 dark:text-rose-400"><TrendingDown size={20}/></div>
-                 <div><p className="text-[10px] uppercase font-bold text-slate-400">Despesas</p><p className="text-lg font-bold text-rose-600 dark:text-rose-400">{formatMoney(summary.expense)}</p></div>
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                 <div className="p-2 bg-brand-100 rounded-lg text-brand-600 dark:bg-brand-900/30 dark:text-brand-400"><Wallet size={20}/></div>
-                 <div><p className="text-[10px] uppercase font-bold text-slate-400">Saldo</p><p className={`text-lg font-bold ${summary.balance >= 0 ? 'text-brand-600 dark:text-brand-400' : 'text-rose-600 dark:text-rose-400'}`}>{formatMoney(summary.balance)}</p></div>
+
+              {/* Botões de Ação Rápida */}
+              <div className="flex items-center gap-2">
+                 {/* Botão de Privacidade */}
+                 <button 
+                    onClick={() => setIsPrivacyMode(!isPrivacyMode)} 
+                    className="p-3 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all shadow-sm active:scale-95 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
+                    title={isPrivacyMode ? "Mostrar Valores" : "Ocultar Valores"}
+                 >
+                    {isPrivacyMode ? <EyeOff size={18}/> : <Eye size={18}/>}
+                 </button>
+
+                 {/* Botão Tema */}
+                 <button 
+                    onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} 
+                    className="p-3 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all shadow-sm active:scale-95 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
+                    title={theme === 'dark' ? "Modo Claro" : "Modo Escuro"}
+                 >
+                    {theme === 'dark' ? <Sun size={18}/> : <Moon size={18}/>}
+                 </button>
+
+                 {/* Botão Adicionar */}
+                 <button onClick={() => setIsModalOpen(true)} className="hidden md:flex bg-slate-900 text-white p-3 rounded-xl hover:bg-slate-800 transition-all shadow-lg hover:shadow-xl active:scale-95 dark:bg-brand-600 dark:hover:bg-brand-700">
+                    <Plus size={18}/>
+                 </button>
               </div>
            </div>
-
-           <button onClick={() => setIsModalOpen(true)} className="hidden md:flex bg-slate-900 text-white p-3 rounded-xl hover:bg-slate-800 transition-all shadow-lg hover:shadow-xl active:scale-95 dark:bg-brand-600 dark:hover:bg-brand-700">
-              <Plus size={20}/>
-           </button>
         </div>
 
         {/* --- ASSISTENTE INTELIGENTE (IA) --- */}
@@ -174,14 +208,10 @@ export function DashboardView({
         {/* --- GRID PRINCIPAL --- */}
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 mb-6">
            
-           {/* GRÁFICO DE ÁREA (Evolução Diária) */}
+           {/* GRÁFICO DE ÁREA */}
            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 xl:col-span-2 flex flex-col min-h-[350px] dark:bg-slate-900 dark:border-slate-800">
               <div className="flex justify-between items-center mb-6">
                  <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider dark:text-slate-400">Evolução Diária</h3>
-                 <div className="flex gap-3 text-xs font-bold">
-                    <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> Entradas</span>
-                    <span className="flex items-center gap-1 text-rose-600 dark:text-rose-400"><div className="w-2 h-2 rounded-full bg-rose-500"></div> Saídas</span>
-                 </div>
               </div>
               <div className="flex-1 w-full">
                  <ResponsiveContainer width="100%" height="100%">
@@ -196,10 +226,14 @@ export function DashboardView({
                              <stop offset="95%" stopColor="#e11d48" stopOpacity={0}/>
                           </linearGradient>
                        </defs>
-                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(148, 163, 184, 0.2)" />
+                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(148, 163, 184, 0.1)" />
                        <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} />
-                       <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} tickFormatter={(v) => `R$${v}`} />
-                       <Tooltip contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}} />
+                       {/* O Eixo Y também esconde os valores no modo privacidade */}
+                       <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} tickFormatter={(v) => isPrivacyMode ? '•••' : `R$${v}`} />
+                       <Tooltip 
+                         contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}} 
+                         formatter={(value: any) => [formatMoney(value), "Valor"]} 
+                       />
                        <Area type="monotone" dataKey="income" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorIncome)" />
                        <Area type="monotone" dataKey="expense" stroke="#e11d48" strokeWidth={3} fillOpacity={1} fill="url(#colorExpense)" />
                     </AreaChart>
@@ -215,7 +249,7 @@ export function DashboardView({
                  {categoryStats.length === 0 ? (
                     <div className="text-center text-slate-400 py-10 text-sm">
                        <p>Nenhum gasto ou meta definida.</p>
-                       <a href="/planning" className="text-brand-600 hover:underline dark:text-brand-400">Configurar no Planejamento</a>
+                       <a href="/planning" className="text-brand-600 hover:underline dark:text-brand-400">Configurar</a>
                     </div>
                  ) : categoryStats.map((cat, idx) => (
                     <div key={idx}>
@@ -227,10 +261,7 @@ export function DashboardView({
                           </div>
                        </div>
                        <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden dark:bg-slate-800">
-                          <div 
-                            className={`h-full rounded-full transition-all duration-500 ${cat.percent > 100 ? 'bg-rose-500' : 'bg-brand-500'}`} 
-                            style={{ width: `${Math.min(cat.percent, 100)}%` }}
-                          ></div>
+                          <div className={`h-full rounded-full transition-all duration-500 ${cat.percent > 100 ? 'bg-rose-500' : 'bg-brand-500'}`} style={{ width: `${Math.min(cat.percent, 100)}%` }}></div>
                        </div>
                     </div>
                  ))}
@@ -257,7 +288,7 @@ export function DashboardView({
            </div>
         </div>
 
-        {/* --- RODAPÉ: GRÁFICO E LISTA RECENTE --- */}
+        {/* --- RODAPÉ --- */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
            
            {/* Top Categorias (Gráfico de Barras) */}
@@ -267,7 +298,7 @@ export function DashboardView({
                  <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={categoryStats.slice(0, 7)} barSize={30}>
                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#64748b'}} interval={0} />
-                       <Tooltip cursor={{fill: 'rgba(148, 163, 184, 0.1)'}} contentStyle={{borderRadius: '8px', border: 'none'}} />
+                       <Tooltip cursor={{fill: 'rgba(148, 163, 184, 0.1)'}} contentStyle={{borderRadius: '8px', border: 'none'}} formatter={(value: any) => [formatMoney(value), "Gasto"]} />
                        <Bar dataKey="spent" radius={[4, 4, 0, 0]}>
                           {categoryStats.map((entry, index) => (
                              <Cell key={`cell-${index}`} fill={index === 0 ? '#f97316' : '#fb923c'} /> 
@@ -278,7 +309,7 @@ export function DashboardView({
               </div>
            </div>
 
-           {/* Lista de Transações Recentes do Mês */}
+           {/* Lista de Transações Recentes */}
            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col dark:bg-slate-900 dark:border-slate-800">
               <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-6 dark:text-slate-400">Últimas Movimentações</h3>
               <div className="flex-1 space-y-4 overflow-y-auto max-h-[300px] pr-2 custom-scrollbar">
@@ -307,18 +338,11 @@ export function DashboardView({
 
       </main>
 
-      {/* BOTÃO FLUTUANTE (Mobile) */}
       <button onClick={() => setIsModalOpen(true)} className="md:hidden fixed bottom-6 right-6 bg-brand-600 text-white p-4 rounded-full shadow-2xl z-50 hover:scale-105 transition-transform dark:bg-brand-500">
          <Plus size={24}/>
       </button>
 
-      {/* MODAL */}
-      <NewTransactionModal 
-        isOpen={isModalOpen} 
-        onClose={handleSuccess} 
-        userId={userId} 
-        onSuccess={handleSuccess} 
-      />
+      <NewTransactionModal isOpen={isModalOpen} onClose={handleSuccess} userId={userId} onSuccess={handleSuccess} />
     </div>
   );
 }
