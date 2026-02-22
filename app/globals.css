@@ -1,13 +1,16 @@
 @import "tailwindcss";
 
+/* 1. O SEGREDO DO V4: Avisa o Tailwind para usar a classe .dark que o nosso botão adiciona */
+@variant dark (&:where(.dark, .dark *));
+
 @theme {
-  /* Definindo nossa paleta "Brand" (Indigo Premium) diretamente aqui */
+  /* Nossa paleta "Brand" (Indigo Premium) */
   --color-brand-50: #eef2ff;
   --color-brand-100: #e0e7ff;
   --color-brand-200: #c7d2fe;
   --color-brand-300: #a5b4fc;
   --color-brand-400: #818cf8;
-  --color-brand-500: #6366f1; /* Cor Principal */
+  --color-brand-500: #6366f1;
   --color-brand-600: #4f46e5;
   --color-brand-700: #4338ca;
   --color-brand-800: #3730a3;
@@ -15,46 +18,26 @@
   --color-brand-950: #1e1b4b;
 }
 
-/* Configurações padrão do Next.js (pode manter ou remover) */
-:root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
+/* 2. Removemos o fundo travado do Next.js e usamos o do Tailwind */
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-300;
   }
 }
 
-body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
-}
-
-/* --- SCROLLBAR PERSONALIZADA (DARK) --- */
-/* Funciona no Chrome, Edge, Safari */
+/* --- SCROLLBAR PERSONALIZADA --- */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 6px; /* Largura fina */
+  width: 6px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent; /* Fundo transparente */
+  background: transparent;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: #334155; /* Cor Slate-700 (Discreta) */
-  border-radius: 20px; /* Bordas arredondadas */
+  @apply bg-slate-300 dark:bg-slate-700 rounded-full;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: #475569; /* Slate-600 ao passar o mouse */
+  @apply bg-slate-400 dark:bg-slate-600;
 }
