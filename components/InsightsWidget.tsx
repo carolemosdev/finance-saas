@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 
 interface InsightsWidgetProps {
   transactions: any[];
-  balance?: number; // Adicionado para a IA calcular dinheiro parado
+  balance?: number;
 }
 
 interface Insight {
@@ -64,7 +64,9 @@ export function InsightsWidget({ transactions, balance = 0 }: InsightsWidgetProp
         return acc;
       }, {} as Record<string, number>);
 
-      const topCategory = Object.entries(expensesByCategory).sort((a, b) => b[1] - a[1])[0];
+      // CORREÇÃO AQUI: Forçando o TypeScript a entender que é um array de [Texto, Número]
+      const entries = Object.entries(expensesByCategory) as [string, number][];
+      const topCategory = entries.sort((a, b) => b[1] - a[1])[0];
 
       if (topCategory && topCategory[1] > (totalIncome * 0.3) && totalIncome > 0) {
         newInsights.push({
@@ -95,7 +97,7 @@ export function InsightsWidget({ transactions, balance = 0 }: InsightsWidgetProp
     setInsights(newInsights);
   };
 
-  // --- 2. LÓGICA DO GRÁFICO (Seu código original) ---
+  // --- 2. LÓGICA DO GRÁFICO ---
   const last7Days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - i);
@@ -119,7 +121,7 @@ export function InsightsWidget({ transactions, balance = 0 }: InsightsWidgetProp
   return (
     <div className="space-y-6">
       
-      {/* SESSÃO DE INSIGHTS DA IA (Aparece apenas se houver avisos) */}
+      {/* SESSÃO DE INSIGHTS DA IA */}
       {insights.length > 0 && (
         <div className="animate-in fade-in slide-in-from-top-4 duration-700">
           <div className="flex items-center gap-2 mb-3 px-1">
@@ -176,7 +178,7 @@ export function InsightsWidget({ transactions, balance = 0 }: InsightsWidgetProp
         </div>
       )}
 
-      {/* SESSÃO DO GRÁFICO (Seu componente original adaptado para Dark Mode) */}
+      {/* SESSÃO DO GRÁFICO */}
       <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col">
         <div className="mb-6">
           <h3 className="font-bold text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wider">Gastos da Semana</h3>
@@ -205,7 +207,6 @@ export function InsightsWidget({ transactions, balance = 0 }: InsightsWidgetProp
                 {chartData.map((entry, index) => (
                   <Cell 
                       key={`cell-${index}`} 
-                      // Cor principal mantida, mas a cor vazia adaptada para suportar melhor o dark mode
                       fill={entry.value > 0 ? '#6366f1' : 'rgba(148, 163, 184, 0.2)'} 
                       className="transition-all hover:opacity-80"
                   />
