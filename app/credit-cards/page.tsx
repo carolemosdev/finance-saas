@@ -4,10 +4,10 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
-import { useTheme } from "next-themes"; // <-- IMPORT TEMA
+import { useTheme } from "next-themes"; 
 import { 
   Wallet, CreditCard, Plus, Loader2, Trash2, Pencil,
-  Eye, EyeOff, Sun, Moon // <-- IMPORT ÍCONES
+  Eye, EyeOff, Sun, Moon, Calendar, AlertTriangle, ArrowUpRight
 } from "lucide-react";
 import { NewCreditCardModal } from "../../components/NewCreditCardModal";
 import { MobileNav } from "../../components/MobileNav";
@@ -93,12 +93,28 @@ export default function CreditCardsPage() {
 
   const handleLogout = async () => { await supabase.auth.signOut(); router.push("/auth"); };
   
-  // --- FORMATADOR ATUALIZADO (Respeita Privacidade) ---
   const formatMoney = (val: number) => {
     if (isPrivacyMode) return "R$ •••••";
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
+
+  // --- CÁLCULOS DO RESUMO GLOBAL ---
+  const totalInvoices = cards.reduce((acc, c) => acc + c.current_invoice, 0);
+  const globalLimit = cards.reduce((acc, c) => acc + c.limit_amount, 0);
+  const globalAvailable = globalLimit - totalInvoices;
   
+  // Encontrar o próximo vencimento
+  const today = new Date().getDate();
+  const sortedCardsByDue = [...cards].sort((a, b) => {
+    // Lógica super simples para achar o próximo dia útil
+    let diffA = a.due_day - today;
+    let diffB = b.due_day - today;
+    if (diffA < 0) diffA += 30; // Se já passou, é pro mês que vem
+    if (diffB < 0) diffB += 30;
+    return diffA - diffB;
+  });
+  const nextCardDue = sortedCardsByDue.length > 0 ? sortedCardsByDue[0] : null;
+
   if (!mounted) return null;
 
   return (
@@ -111,13 +127,12 @@ export default function CreditCardsPage() {
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <div>
               <h2 className="text-3xl font-extrabold text-slate-800 flex items-center gap-2 dark:text-slate-100">
-                  <CreditCard className="text-brand-600 dark:text-brand-400"/> Meus Cartões
+                  <CreditCard className="text-brand-600 dark:text-brand-400"/> Gestão de Cartões
               </h2>
-              <p className="text-slate-500 dark:text-slate-400">Gerencie seus limites e datas.</p>
+              <p className="text-slate-500 dark:text-slate-400 mt-1">Controle suas faturas e limites em tempo real.</p>
           </div>
           
-          {/* --- BOTÕES DE AÇÃO (HEADER) --- */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full md:w-auto">
                <button 
                   onClick={togglePrivacy} 
                   className="p-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all shadow-sm active:scale-95 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800"
@@ -134,7 +149,7 @@ export default function CreditCardsPage() {
                   {resolvedTheme === 'dark' ? <Sun size={18}/> : <Moon size={18}/>}
                </button>
 
-               <button onClick={() => setIsModalOpen(true)} className="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-xl flex items-center gap-2 font-bold shadow-lg transition-all hover:scale-105 active:scale-95 dark:bg-brand-600 dark:hover:bg-brand-700">
+               <button onClick={() => setIsModalOpen(true)} className="flex-1 md:flex-none bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-xl flex items-center justify-center gap-2 font-bold shadow-lg transition-all active:scale-95 dark:bg-brand-600 dark:hover:bg-brand-700">
                   <Plus size={20} /> Novo Cartão
                </button>
           </div>
@@ -154,53 +169,134 @@ export default function CreditCardsPage() {
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {cards.map(card => {
-                  const usage = card.limit_amount > 0 ? (card.current_invoice / card.limit_amount) * 100 : 0;
-                  
-                  return (
-                    <div key={card.id} className="rounded-2xl shadow-xl shadow-slate-200/60 dark:shadow-none border-0 p-6 text-white relative overflow-hidden h-64 flex flex-col justify-between transition-transform hover:-translate-y-2 group" style={{ backgroundColor: card.color || '#3b82f6' }}>
-                      
-                      {/* Efeito de Fundo */}
-                      <div className="absolute top-0 right-0 -mr-6 -mt-6 w-32 h-32 bg-white/20 rounded-full blur-2xl pointer-events-none"></div>
-                      
-                      <div className="flex justify-between items-start z-10">
-                        <div>
-                            <p className="text-xs font-bold opacity-80 uppercase tracking-widest">Cartão</p>
-                            <h3 className="text-xl font-bold tracking-wide mt-1">{card.name}</h3>
+              <div className="space-y-8">
+                
+                {/* --- PAINEL DE RESUMO GLOBAL --- */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 dark:bg-slate-900 dark:border-slate-800">
+                     <div className="bg-rose-50 p-3 rounded-xl text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
+                        <AlertTriangle size={24} />
+                     </div>
+                     <div>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Faturas em Aberto</p>
+                        <p className="text-2xl font-extrabold text-slate-800 dark:text-slate-100">{formatMoney(totalInvoices)}</p>
+                     </div>
+                  </div>
+
+                  <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 dark:bg-slate-900 dark:border-slate-800">
+                     <div className="bg-emerald-50 p-3 rounded-xl text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
+                        <Wallet size={24} />
+                     </div>
+                     <div>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Limite Disponível</p>
+                        <p className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">{formatMoney(globalAvailable)}</p>
+                     </div>
+                  </div>
+
+                  <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between dark:bg-slate-900 dark:border-slate-800">
+                     <div>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Próximo Vencimento</p>
+                        <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{nextCardDue ? nextCardDue.name : '---'}</p>
+                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                          {nextCardDue ? `Dia ${nextCardDue.due_day} • ${formatMoney(nextCardDue.current_invoice)}` : 'Nenhuma fatura'}
+                        </p>
+                     </div>
+                     <div className="bg-slate-50 p-3 rounded-full text-slate-400 dark:bg-slate-800 dark:text-slate-500">
+                        <Calendar size={24} />
+                     </div>
+                  </div>
+                </div>
+
+                {/* --- GRID DE CARTÕES (Redesign) --- */}
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 pt-4">
+                  {cards.map(card => {
+                    const usage = card.limit_amount > 0 ? (card.current_invoice / card.limit_amount) * 100 : 0;
+                    
+                    // Lógica de Cores do Limite
+                    let progressColor = "bg-white";
+                    let dangerText = "";
+                    if (usage > 85) {
+                      progressColor = "bg-red-400";
+                      dangerText = "Limite Crítico!";
+                    } else if (usage > 60) {
+                      progressColor = "bg-amber-400";
+                    }
+                    
+                    return (
+                      <div key={card.id} className="relative group">
+                        
+                        {/* O CARTÃO FÍSICO (Neumorfismo simples) */}
+                        <div 
+                          className="rounded-[20px] shadow-xl dark:shadow-none border border-white/20 p-6 text-white relative overflow-hidden h-56 flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl z-10" 
+                          style={{ 
+                            background: `linear-gradient(135deg, ${card.color || '#3b82f6'}, #0f172a)` // Gradiente para dar profundidade
+                          }}
+                        >
+                          {/* Símbolos Decorativos do Cartão */}
+                          <div className="absolute top-0 right-0 -mr-10 -mt-10 w-40 h-40 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
+                          
+                          <div className="flex justify-between items-start z-10">
+                            <div className="flex items-center gap-3">
+                               {/* Simulação de Chip */}
+                               <div className="w-10 h-8 rounded bg-gradient-to-br from-amber-200 to-amber-400/50 opacity-80 border border-amber-300/30"></div>
+                               <svg className="w-5 h-5 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>
+                            </div>
+
+                            {/* Marca / Apelido */}
+                            <h3 className="text-xl font-black tracking-widest opacity-90 drop-shadow-sm uppercase">{card.name}</h3>
+                          </div>
+                          
+                          <div className="z-10 mt-auto">
+                            <div className="flex justify-between items-end mb-4">
+                                <div className="flex flex-col">
+                                    <span className="opacity-70 text-[10px] uppercase font-bold tracking-widest mb-1">Fatura Atual</span>
+                                    <span className="font-extrabold text-3xl drop-shadow-sm">{formatMoney(card.current_invoice)}</span>
+                                </div>
+                            </div>
+
+                            {/* Detalhes de Fechamento */}
+                            <div className="flex justify-between text-xs opacity-80 font-medium uppercase tracking-wider">
+                                <span>Fecha: Dia {card.closing_day}</span>
+                                <span>Vence: Dia {card.due_day}</span>
+                            </div>
+                          </div>
                         </div>
-                        {/* Botões de Ação */}
-                        <div className="flex gap-2">
-                           <button onClick={(e) => { e.stopPropagation(); handleEdit(card); }} className="bg-black/20 p-2 rounded-lg hover:bg-white/20 transition-colors active:scale-95" title="Editar">
-                               <Pencil size={16} className="text-white" />
-                           </button>
-                           <button onClick={(e) => { e.stopPropagation(); handleDelete(card.id); }} className="bg-black/20 p-2 rounded-lg hover:bg-red-500/80 transition-colors active:scale-95" title="Excluir">
-                               <Trash2 size={16} className="text-white" />
-                           </button>
-                        </div>
-                      </div>
-                      
-                      <div className="z-10 mt-4">
-                        <div className="flex justify-between items-end mb-2">
-                            <div className="flex flex-col">
-                                <span className="opacity-70 text-[10px] uppercase font-bold">Fatura Atual</span>
-                                <span className="font-extrabold text-2xl">{formatMoney(card.current_invoice)}</span>
+
+                        {/* BARRA DE INFORMAÇÕES EXTRAS (Aparece embaixo do cartão) */}
+                        <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 border-t-0 rounded-b-2xl p-4 pt-6 -mt-4 relative z-0 shadow-sm transition-all group-hover:bg-slate-50 dark:group-hover:bg-slate-800/50">
+                            
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Uso do Limite</span>
+                                <span className={`text-xs font-bold ${usage > 85 ? 'text-red-500' : 'text-slate-700 dark:text-slate-300'}`}>
+                                  {isPrivacyMode ? "•••" : usage.toFixed(0)}%
+                                </span>
+                            </div>
+                            
+                            {/* Barra de Progresso do Limite colorida */}
+                            <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden mb-3">
+                                <div className={`h-full rounded-full transition-all duration-1000 ${progressColor}`} style={{ width: `${Math.min(usage, 100)}%` }}></div>
+                            </div>
+
+                            <div className="flex justify-between items-center text-xs">
+                                <span className="text-slate-400 font-medium">Disponível: {formatMoney(card.limit_amount - card.current_invoice)}</span>
+                                {dangerText && <span className="text-red-500 font-bold animate-pulse">{dangerText}</span>}
+                            </div>
+
+                            {/* Botões de Ação Movemos para cá para não poluir o cartão físico */}
+                            <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                               <button onClick={() => handleEdit(card)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/30 transition-colors">
+                                   <Pencil size={14} /> Editar
+                               </button>
+                               <button onClick={() => handleDelete(card.id)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 transition-colors">
+                                   <Trash2 size={14} /> Excluir
+                               </button>
                             </div>
                         </div>
 
-                        {/* Barra de Progresso do Limite */}
-                        <div className="w-full bg-black/20 h-1.5 rounded-full overflow-hidden mb-2">
-                            <div className="h-full bg-white/90 rounded-full transition-all duration-1000" style={{ width: `${Math.min(usage, 100)}%` }}></div>
-                        </div>
-
-                        <div className="flex justify-between text-xs opacity-90 font-medium">
-                            <span>Disponível: {formatMoney(card.limit_amount - card.current_invoice)}</span>
-                            <span>{isPrivacyMode ? "•••" : usage.toFixed(0)}% uso</span>
-                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             )}
           </>
