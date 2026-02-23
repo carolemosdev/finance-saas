@@ -77,7 +77,7 @@ export default function CreditCardsPage() {
   };
 
   // --- MOTOR DE CICLO DE FATURA (A Mágica do Banco) ---
-  const getInvoiceStatus = (closingDay: number, dueDay: number) => {
+const getInvoiceStatus = (closingDay: number, dueDay: number, invoiceAmount: number) => {
     const today = new Date().getDate();
     let isClosed = false;
     let isOverdue = false;
@@ -85,7 +85,6 @@ export default function CreditCardsPage() {
     let daysToDue = 0;
 
     if (closingDay < dueDay) {
-        // Ex: Fecha dia 10, Vence dia 20 (mesmo mês)
         if (today < closingDay) {
             daysToClose = closingDay - today;
         } else if (today >= closingDay && today <= dueDay) {
@@ -95,7 +94,6 @@ export default function CreditCardsPage() {
             isOverdue = true;
         }
     } else {
-        // Ex: Fecha dia 25, Vence dia 05 (mês seguinte)
         if (today <= dueDay) {
             isClosed = true;
             daysToDue = dueDay - today;
@@ -108,12 +106,23 @@ export default function CreditCardsPage() {
         }
     }
 
+    // A CORREÇÃO ESTÁ AQUI: Se o valor for 0, não tem nada atrasado ou fechado aguardando pagamento.
+    if (invoiceAmount <= 0) {
+        return { 
+          label: `Próximo fechamento: Dia ${closingDay}`, 
+          color: 'bg-emerald-500 text-white', 
+          badge: 'FATURA ZERADA', 
+          isUrgent: false 
+        };
+    }
+
+    // Se tiver valor a pagar, segue a lógica de alerta:
     if (isOverdue) return { label: 'Atrasada', color: 'bg-red-500 text-white animate-pulse', badge: 'ATRASADA', isUrgent: true };
     if (isClosed) {
         if (daysToDue <= 3) return { label: `Vence em ${daysToDue} dias`, color: 'bg-rose-500 text-white', badge: 'VENCE LOGO', isUrgent: true };
         return { label: `Vence dia ${dueDay}`, color: 'bg-sky-500 text-white', badge: 'FECHADA', isUrgent: false };
     }
-    // Fatura Aberta
+    
     if (daysToClose <= 3) return { label: `Fecha em ${daysToClose} dias`, color: 'bg-amber-500 text-white', badge: 'FECHA LOGO', isUrgent: true };
     return { label: `Fecha dia ${closingDay}`, color: 'bg-emerald-500 text-white', badge: 'ABERTA', isUrgent: false };
   };
@@ -252,7 +261,7 @@ export default function CreditCardsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 pt-4">
                   {cards.map(card => {
                     const usage = card.limit_amount > 0 ? (card.current_invoice / card.limit_amount) * 100 : 0;
-                    const status = getInvoiceStatus(card.closing_day, card.due_day);
+                    const status = getInvoiceStatus(card.closing_day, card.due_day, card.current_invoice);
                     
                     let progressColor = "bg-white";
                     if (usage > 85) progressColor = "bg-red-400";
