@@ -12,6 +12,7 @@ import { NewTransactionModal } from "./NewTransactionModal";
 import { Sidebar } from "./Sidebar"; 
 import { MobileNav } from "./MobileNav"; 
 import { InsightsWidget } from "./InsightsWidget"; 
+import { WhatsNewModal } from "./WhatsNewModal"; // <--- IMPORT DO MODAL DE NOVIDADES
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   BarChart, Bar, Cell, PieChart, Pie
@@ -40,10 +41,11 @@ export function DashboardView({
   
   const router = useRouter();
   
-  // --- ESTADOS DE PRIVACIDADE E TEMA ---
-  const { resolvedTheme, setTheme } = useTheme(); // <-- Usando resolvedTheme para funcionar 100%
+  // --- ESTADOS DE PRIVACIDADE, TEMA E NOVIDADES ---
+  const { resolvedTheme, setTheme } = useTheme(); 
   const [mounted, setMounted] = useState(false);
   const [isPrivacyMode, setIsPrivacyMode] = useState(false);
+  const [showWhatsNew, setShowWhatsNew] = useState(false); // <--- ESTADO DO MODAL
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
@@ -51,9 +53,16 @@ export function DashboardView({
 
   useEffect(() => {
     setMounted(true);
-    // Recupera a preferência salva do usuário
+    // Recupera a preferência salva do usuário (Privacidade)
     const savedPrivacy = localStorage.getItem("flui_privacy_mode");
     if (savedPrivacy === "true") setIsPrivacyMode(true);
+
+    // Verifica se já viu as novidades da versão 2.0
+    const version = "v2.0"; 
+    if (localStorage.getItem("flui_version_seen") !== version) {
+      setShowWhatsNew(true);
+      localStorage.setItem("flui_version_seen", version); // Marca como visto
+    }
   }, []);
 
   const togglePrivacy = () => {
@@ -118,7 +127,6 @@ export function DashboardView({
   const handleLogout = async () => { await supabase.auth.signOut(); router.push("/auth"); };
   const handleSuccess = () => { setIsModalOpen(false); router.refresh(); };
   
-  // --- FORMATAÇÃO INTELIGENTE (Respeita Privacidade) ---
   const formatMoney = (val: number) => {
     if (isPrivacyMode) return "R$ •••••";
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -134,10 +142,8 @@ export function DashboardView({
 
       <main className="flex-1 overflow-y-auto relative z-0 p-4 md:p-8">
         
-        {/* --- CABEÇALHO SUPERIOR (Filtros, Controles e KPIs) --- */}
+        {/* --- CABEÇALHO SUPERIOR --- */}
         <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-8 gap-6">
-           
-           {/* Lado Esquerdo: Filtros e Título */}
            <div className="flex items-center gap-4">
               <h2 className="text-2xl font-extrabold text-slate-800 hidden md:block dark:text-slate-100">Balanço Mensal</h2>
               
@@ -161,10 +167,7 @@ export function DashboardView({
               </div>
            </div>
 
-           {/* Lado Direito: KPIs e Botões de Controle */}
            <div className="flex flex-col md:flex-row items-start md:items-center gap-6 w-full xl:w-auto">
-              
-              {/* KPIs Rápido */}
               <div className="flex gap-6 overflow-x-auto pb-2 md:pb-0 scrollbar-hide w-full md:w-auto">
                   <div className="flex items-center gap-3 shrink-0">
                     <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"><TrendingUp size={20}/></div>
@@ -182,7 +185,6 @@ export function DashboardView({
 
               <div className="hidden md:block w-px h-8 bg-slate-200 dark:bg-slate-800"></div>
 
-              {/* Botões de Ação */}
               <div className="flex items-center gap-2 w-full md:w-auto justify-end">
                  <button 
                     onClick={togglePrivacy} 
@@ -207,14 +209,9 @@ export function DashboardView({
            </div>
         </div>
 
-        {/* --- ASSISTENTE INTELIGENTE (IA) --- */}
-        {/* Adicionei uma prop isPrivacyMode para que a IA também censure os números caso precise no futuro */}
         <InsightsWidget transactions={transactions} balance={summary.balance} />
 
-        {/* --- GRID PRINCIPAL --- */}
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 mb-6">
-           
-           {/* GRÁFICO DE ÁREA */}
            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 xl:col-span-2 flex flex-col min-h-[350px] dark:bg-slate-900 dark:border-slate-800 transition-colors duration-300">
               <div className="flex justify-between items-center mb-6">
                  <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider dark:text-slate-400">Evolução Diária</h3>
@@ -250,7 +247,6 @@ export function DashboardView({
               </div>
            </div>
 
-           {/* PAINEL LATERAL: METAS vs REALIZADO */}
            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col dark:bg-slate-900 dark:border-slate-800 transition-colors duration-300">
               <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-6 dark:text-slate-400">Orçamento do Mês</h3>
               
@@ -276,7 +272,6 @@ export function DashboardView({
                  ))}
               </div>
 
-              {/* Gráfico Donut Resumo */}
               <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
                  <div>
                     <p className="text-xs text-slate-400 font-bold uppercase">Uso Geral</p>
@@ -297,10 +292,7 @@ export function DashboardView({
            </div>
         </div>
 
-        {/* --- RODAPÉ --- */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-           
-           {/* Top Categorias */}
            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 min-h-[300px] flex flex-col dark:bg-slate-900 dark:border-slate-800 transition-colors duration-300">
               <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-6 dark:text-slate-400">Top Categorias (Gastos)</h3>
               <div className="flex-1 w-full">
@@ -318,7 +310,6 @@ export function DashboardView({
               </div>
            </div>
 
-           {/* Últimas Transações */}
            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col dark:bg-slate-900 dark:border-slate-800 transition-colors duration-300">
               <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-6 dark:text-slate-400">Últimas Movimentações</h3>
               <div className="flex-1 space-y-4 overflow-y-auto max-h-[300px] pr-2 custom-scrollbar">
@@ -342,17 +333,19 @@ export function DashboardView({
                  ))}
               </div>
            </div>
-
         </div>
 
       </main>
 
-      {/* Botão flutuante mobile mantido por garantia */}
       <button onClick={() => setIsModalOpen(true)} className="md:hidden fixed bottom-6 right-6 bg-brand-600 text-white p-4 rounded-full shadow-2xl z-50 hover:scale-105 transition-transform dark:bg-brand-500">
          <Plus size={24}/>
       </button>
 
+      {/* MODAIS AQUI NO FINAL */}
       <NewTransactionModal isOpen={isModalOpen} onClose={handleSuccess} userId={userId} onSuccess={handleSuccess} />
+      
+      {/* O MODAL DE NOVIDADES */}
+      <WhatsNewModal isOpen={showWhatsNew} onClose={() => setShowWhatsNew(false)} />
     </div>
   );
 }
