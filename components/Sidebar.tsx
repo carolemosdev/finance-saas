@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
-  Wallet, Target, Briefcase, CreditCard, LogOut, 
+  Waves, Target, Briefcase, CreditCard, LogOut, 
   LayoutDashboard, TrendingUp, TrendingDown, PieChart 
 } from "lucide-react";
 
@@ -16,9 +17,9 @@ export function Sidebar({ userEmail, onLogout }: SidebarProps) {
 
   const isActive = (path: string) => pathname === path;
 
-  // Função auxiliar para gerar links
+  // Função auxiliar para gerar links (Agora usando o <Link> do Next.js para ser ultra-rápido)
   const NavLink = ({ href, icon: Icon, label }: any) => (
-    <a 
+    <Link 
       href={href} 
       className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 group ${
         isActive(href) 
@@ -28,18 +29,27 @@ export function Sidebar({ userEmail, onLogout }: SidebarProps) {
     >
       <Icon size={20} className={isActive(href) ? 'text-white' : 'text-slate-500 group-hover:text-white transition-colors'} /> 
       {label}
-    </a>
+    </Link>
   );
 
   return (
     <aside className="w-72 bg-slate-900 hidden md:flex flex-col shadow-2xl z-10 relative shrink-0 h-screen">
-      <div className="p-8">
-        <h1 className="text-3xl font-extrabold text-white flex items-center gap-3 tracking-tight">
-          <div className="bg-brand-600 p-2 rounded-lg shadow-lg shadow-brand-600/50">
-            <Wallet className="w-7 h-7 text-white" /> 
+      
+      {/* --- LOGO FLUI CLICÁVEL --- */}
+      <div className="p-8 pb-6">
+        <Link 
+          href="/" 
+          className="flex items-center gap-3 cursor-pointer group outline-none w-fit"
+          title="Ir para o Dashboard"
+        >
+          <div className="bg-brand-600 p-2.5 rounded-xl text-white shadow-lg shadow-brand-600/40 group-hover:scale-110 group-active:scale-95 transition-all duration-300">
+             {/* Ícone de Ondas representando Fluidez */}
+             <Waves size={28} strokeWidth={2.5} />
           </div>
-          Flui
-        </h1>
+          <span className="text-3xl font-black tracking-tight text-white">
+            Flui
+          </span>
+        </Link>
       </div>
 
       <nav className="flex-1 px-6 space-y-2 overflow-y-auto py-4 custom-scrollbar">
