@@ -1,36 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🌊 Flui | Gestão Financeira Inteligente
 
-## Getting Started
+![Next.js](https://img.shields.io/badge/Next.js-black?style=for-the-badge&logo=next.js&logoColor=white)
+![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)
+![Vercel](https://img.shields.io/badge/Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)
 
-First, run the development server:
+O **Flui** é um SaaS (Software as a Service) de gestão financeira pessoal construído para ir além da simples anotação de gastos. Ele oferece controle de orçamentos, inteligência artificial para insights de economia, gestão avançada de faturas de cartão de crédito e acompanhamento de investimentos.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+🌐 **Acesse o projeto online (Live Demo):** [Flui no Vercel](https://finance-saas-swart.vercel.app)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## ✨ Principais Funcionalidades
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **📊 Dashboard Interativo:** Resumo do mês atual com gráficos de evolução diária (área), uso do orçamento (donut) e top categorias (barras).
+- **🤖 Flui AI Insights:** Assistente inteligente que analisa as transações e avisa sobre sobregastos, oportunidades de economia ou dinheiro ocioso na conta.
+- **💳 Motor de Cartão de Crédito:** Cartões com visual neumórfico. O sistema calcula automaticamente os dias de fechamento/vencimento, exibe a barra de uso de limite (com alertas de perigo) e permite zerar a fatura com o botão "Pagar Fatura".
+- **🔄 Débito vs Crédito:** Ao lançar uma despesa e selecionar um cartão, escolha se a compra entra na fatura futura ou se já foi paga na hora.
+- **🎯 Planejamento de Metas:** Matriz de planejamento mensal prevendo receitas e limitando despesas, com acompanhamento do "Realizado vs Planejado".
+- **📈 Investimentos:** Carteira de ativos integrada com a API Brapi para atualização de preços em tempo real, calculando rentabilidade e grau de independência financeira.
+- **🔒 Privacidade e UX:** - **Modo Olhinho (Privacidade):** Oculte todos os valores sensíveis com um clique (sincronizado em todas as telas via `localStorage`).
+  - **Dark Mode / Light Mode:** Suporte nativo e fluido a temas.
+  - **Design Premium:** Efeitos de glassmorphism, gradientes suaves e navegação instantânea.
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## 🛠️ Tecnologias Utilizadas
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Front-end:** [Next.js (App Router)](https://nextjs.org/) + [React](https://reactjs.org/)
+- **Estilização:** [Tailwind CSS v4](https://tailwindcss.com/) + `next-themes`
+- **Ícones:** [Lucide React](https://lucide.dev/)
+- **Gráficos:** [Recharts](https://recharts.org/)
+- **Notificações:** [Sonner](https://sonner.emilkowal.ski/)
+- **Back-end & Auth:** [Supabase](https://supabase.com/) (PostgreSQL, Autenticação com Email/Senha e Google)
+- **Deploy:** [Vercel](https://vercel.com/)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## 💡 Sobre o Projeto
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Este projeto foi desenvolvido com o intuito de aplicar conceitos avançados de engenharia Front-end e UX/UI Design focados em **Fintechs**. 
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+O principal desafio técnico foi criar uma aplicação altamente interativa e responsiva, garantindo que o estado da aplicação (como as faturas de cartão e o planejamento mensal) simulasse com precisão as regras de negócio de um aplicativo bancário real. Toda a arquitetura foi pensada para entregar uma navegação instantânea e uma experiência de usuário imersiva e de alto padrão (nível SaaS de produção).
+
+---
+
+## 📸 Telas do Sistema
+
+*(Confira algumas telas do sistema em funcionamento, demonstrando a adaptação entre temas e funcionalidades).*
+
+<details>
+<summary><b>Clique para expandir as imagens</b></summary>
+
+<br/>
+ <img src="./public/og-image.png" alt="Login Flui" width="200"/>
+ <img src="./public/cartao de credito.png" alt="Aba Cartões Flui" width="400"/>
+ <img src="./public/Dashboard.png" alt="Dashboard Flui" width="400"/>
+
+</details>
+
+---
+
+## 👨‍💻 Autora
+
+Desenvolvido com 🩵 e muito suor por Carol Lemos/carolemosdev
+
+© 2026 Flui. Todos os direitos reservados.
