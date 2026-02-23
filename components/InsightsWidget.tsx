@@ -23,11 +23,33 @@ interface Insight {
 
 export function InsightsWidget({ transactions, balance = 0 }: InsightsWidgetProps) {
   const [insights, setInsights] = useState<Insight[]>([]);
+  const [isPrivacyMode, setIsPrivacyMode] = useState(false);
   const router = useRouter();
 
+  // --- SINCRONIZAÇÃO DE PRIVACIDADE ---
+  // Fica de olho no localStorage para atualizar os textos da IA na mesma hora que clicar no olhinho
+  useEffect(() => {
+    const checkPrivacy = () => {
+      const savedPrivacy = localStorage.getItem("flui_privacy_mode") === "true";
+      if (savedPrivacy !== isPrivacyMode) {
+        setIsPrivacyMode(savedPrivacy);
+      }
+    };
+    
+    checkPrivacy(); // Checa ao montar
+    const interval = setInterval(checkPrivacy, 500); // Mantém sincronizado
+    return () => clearInterval(interval);
+  }, [isPrivacyMode]);
+
+  // Sempre que a privacidade mudar, a IA regera os textos
   useEffect(() => {
     generateAIInsights();
-  }, [transactions, balance]);
+  }, [transactions, balance, isPrivacyMode]);
+
+  const formatMoney = (val: number) => {
+    if (isPrivacyMode) return "R$ •••••";
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+  };
 
   const generateAIInsights = () => {
     const newInsights: Insight[] = [];
@@ -46,7 +68,7 @@ export function InsightsWidget({ transactions, balance = 0 }: InsightsWidgetProp
         id: "cashflow-negative",
         type: "CRITICAL",
         title: "Alerta de Sobregasto",
-        message: `Você gastou a mais do que ganhou este mês. Cuidado com o cheque especial.`,
+        message: `Você gastou ${formatMoney(totalExpense - totalIncome)} a mais do que ganhou este mês. Cuidado com o cheque especial.`,
         icon: AlertCircle,
         actionText: "Ver Despesas",
         actionRoute: "/expenses"
@@ -69,7 +91,7 @@ export function InsightsWidget({ transactions, balance = 0 }: InsightsWidgetProp
           id: "high-category-spend",
           type: "SUGGESTION",
           title: "Oportunidade de Economia",
-          message: `Reduzir os gastos com "${topCategory[0]}" é o caminho mais rápido para sobrar dinheiro este mês!`,
+          message: `Reduzir os gastos com "${topCategory[0]}" (${formatMoney(topCategory[1])}) é o caminho mais rápido para sobrar dinheiro este mês!`,
           icon: TrendingDown,
           actionText: "Ajustar Orçamento",
           actionRoute: "/planning"
@@ -83,7 +105,7 @@ export function InsightsWidget({ transactions, balance = 0 }: InsightsWidgetProp
         id: "idle-money",
         type: "POSITIVE",
         title: "Dinheiro Parado",
-        message: `Você tem saldo livre na conta. Que tal investir uma parte para render juros?`,
+        message: `Você tem ${formatMoney(balance)} livres na conta. Que tal investir uma parte para render juros?`,
         icon: PiggyBank,
         actionText: "Ir para Investimentos",
         actionRoute: "/investments"
@@ -98,7 +120,7 @@ export function InsightsWidget({ transactions, balance = 0 }: InsightsWidgetProp
   return (
     <div className="mb-6 animate-in fade-in slide-in-from-top-4 duration-700">
       <div className="flex items-center gap-2 mb-3 px-1">
-        <div className="bg-gradient-to-r from-brand-600 to-indigo-600 p-1 rounded-md shadow-sm">
+        <div className="bg-gradient-to-r from-brand-600 to-indigo-600 p-1.5 rounded-lg shadow-sm">
             <Sparkles size={14} className="text-white" />
         </div>
         <h3 className="text-xs font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-brand-700 to-indigo-700 dark:from-brand-400 dark:to-indigo-400 uppercase tracking-wider">
